@@ -1981,7 +1981,8 @@ void CWriter::WriteDataInitializers() {
         max = memory->page_limits.is_64 ? (static_cast<uint64_t>(1) << 48)
                                         : 65536;
       }
-      Write("wasm_rt_allocate_memory(",
+      const char* suffix = memory->bounds_checked ? "_sw_checked" : "";
+      Write("wasm_rt_allocate_memory", suffix, "(",
             ExternalInstancePtr(ModuleFieldType::Memory, memory->name), ", ",
             memory->page_limits.initial, ", ", max, ", ",
             memory->page_limits.is_64, ");", Newline());
@@ -2523,7 +2524,8 @@ void CWriter::WriteFree() {
     for (const Memory* memory : module_->memories) {
       bool is_import = memory_index < module_->num_memory_imports;
       if (!is_import) {
-        Write("wasm_rt_free_memory(",
+        const char* suffix = memory->bounds_checked ? "_sw_checked" : "";
+        Write("wasm_rt_free_memory", suffix, "(",
               ExternalInstancePtr(ModuleFieldType::Memory, memory->name), ");",
               Newline());
       }
@@ -3359,7 +3361,8 @@ void CWriter::Write(const ExprList& exprs) {
         Memory* memory = module_->memories[module_->GetMemoryIndex(
             cast<MemoryGrowExpr>(&expr)->memidx)];
 
-        Write(StackVar(0), " = wasm_rt_grow_memory(",
+        const char* suffix = memory->bounds_checked ? "_sw_checked" : "";
+        Write(StackVar(0), " = wasm_rt_grow_memory", suffix, "(",
               ExternalInstancePtr(ModuleFieldType::Memory, memory->name), ", ",
               StackVar(0), ");", Newline());
         break;
@@ -4502,9 +4505,10 @@ void CWriter::Write(const LoadExpr& expr) {
   // clang-format on
 
   Memory* memory = module_->memories[module_->GetMemoryIndex(expr.memidx)];
+  const char* suffix = memory->bounds_checked ? "_checked" : "";
 
   Type result_type = expr.opcode.GetResultType();
-  Write(StackVar(0, result_type), " = ", func, "(",
+  Write(StackVar(0, result_type), " = ", func, suffix, "(",
         ExternalInstancePtr(ModuleFieldType::Memory, memory->name), ", (u64)(",
         StackVar(0), ")");
   if (expr.offset != 0)
@@ -4535,9 +4539,11 @@ void CWriter::Write(const StoreExpr& expr) {
   // clang-format on
 
   Memory* memory = module_->memories[module_->GetMemoryIndex(expr.memidx)];
+  const char* suffix = memory->bounds_checked ? "_checked" : "";
 
-  Write(func, "(", ExternalInstancePtr(ModuleFieldType::Memory, memory->name),
-        ", (u64)(", StackVar(1), ")");
+  Write(func, suffix, "(",
+        ExternalInstancePtr(ModuleFieldType::Memory, memory->name), ", (u64)(",
+        StackVar(1), ")");
   if (expr.offset != 0)
     Write(" + ", expr.offset);
   Write(", ", StackVar(0), ");", Newline());

@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "wasm-rt.h"
 
 #if WASM_RT_INSTALL_SIGNAL_HANDLER && !defined(_WIN32)
 #include <signal.h>
@@ -298,8 +299,6 @@ void wasm_rt_free(void) {
 #endif
 }
 
-#if WASM_RT_USE_MMAP
-
 static uint64_t get_allocation_size_for_mmap(wasm_rt_memory_t* memory) {
   assert(!memory->is64 &&
          "memory64 is not yet compatible with WASM_RT_USE_MMAP");
@@ -319,37 +318,54 @@ static uint64_t get_allocation_size_for_mmap(wasm_rt_memory_t* memory) {
 #endif
 }
 
-#endif
+void wasm_rt_allocate_memory_helper(wasm_rt_memory_t* memory,
+                                    uint64_t initial_pages,
+                                    uint64_t max_pages,
+                                    bool is64,
+                                    bool hw_checked) {
+  uint64_t byte_length = initial_pages * PAGE_SIZE;
+  if (hw_checked) {
+    /* Reserve 8GiB. */
+    const uint64_t mmap_size = get_allocation_size_for_mmap(memory);
+    void* addr = os_mmap(mmap_size);
+
+    if (!addr) {
+      os_print_last_error("os_mmap failed.");
+      abort();
+    }
+    int ret = os_mprotect(addr, byte_length);
+    if (ret != 0) {
+      os_print_last_error("os_mprotect failed.");
+      abort();
+    }
+    memory->data = addr;
+  } else {
+    memory->data = calloc(byte_length, 1);
+  }
+  memory->size = byte_length;
+  memory->pages = initial_pages;
+  memory->max_pages = max_pages;
+  memory->is64 = is64;
+}
+
+void wasm_rt_allocate_memory_sw_checked(wasm_rt_memory_t* memory,
+                                        uint64_t initial_pages,
+                                        uint64_t max_pages,
+                                        bool is64) {
+  wasm_rt_allocate_memory_helper(memory, initial_pages, max_pages, is64, false);
+}
 
 void wasm_rt_allocate_memory(wasm_rt_memory_t* memory,
                              uint64_t initial_pages,
                              uint64_t max_pages,
                              bool is64) {
-  uint64_t byte_length = initial_pages * PAGE_SIZE;
-  memory->size = byte_length;
-  memory->pages = initial_pages;
-  memory->max_pages = max_pages;
-  memory->is64 = is64;
-
-#if WASM_RT_USE_MMAP
-  const uint64_t mmap_size = get_allocation_size_for_mmap(memory);
-  void* addr = os_mmap(mmap_size);
-  if (!addr) {
-    os_print_last_error("os_mmap failed.");
-    abort();
-  }
-  int ret = os_mprotect(addr, byte_length);
-  if (ret != 0) {
-    os_print_last_error("os_mprotect failed.");
-    abort();
-  }
-  memory->data = addr;
-#else
-  memory->data = calloc(byte_length, 1);
-#endif
+  wasm_rt_allocate_memory_helper(memory, initial_pages, max_pages, is64,
+                                 WASM_RT_USE_MMAP);
 }
 
-static uint64_t grow_memory_impl(wasm_rt_memory_t* memory, uint64_t delta) {
+uint64_t wasm_rt_grow_memory_helper(wasm_rt_memory_t* memory,
+                                    uint64_t delta,
+                                    bool hw_checked) {
   uint64_t old_pages = memory->pages;
   uint64_t new_pages = memory->pages + delta;
   if (new_pages == 0) {
@@ -361,21 +377,23 @@ static uint64_t grow_memory_impl(wasm_rt_memory_t* memory, uint64_t delta) {
   uint64_t old_size = old_pages * PAGE_SIZE;
   uint64_t new_size = new_pages * PAGE_SIZE;
   uint64_t delta_size = delta * PAGE_SIZE;
-#if WASM_RT_USE_MMAP
-  uint8_t* new_data = memory->data;
-  int ret = os_mprotect(new_data + old_size, delta_size);
-  if (ret != 0) {
-    return (uint64_t)-1;
-  }
-#else
-  uint8_t* new_data = realloc(memory->data, new_size);
-  if (new_data == NULL) {
-    return (uint64_t)-1;
-  }
+  uint8_t* new_data;
+  if (hw_checked) {
+    new_data = memory->data;
+    int ret = os_mprotect(new_data + old_size, delta_size);
+    if (ret != 0) {
+      return (uint64_t)-1;
+    }
+  } else {
+    new_data = realloc(memory->data, new_size);
+    if (new_data == NULL) {
+      return (uint64_t)-1;
+    }
+
 #if !WABT_BIG_ENDIAN
-  memset(new_data + old_size, 0, delta_size);
+    memset(new_data + old_size, 0, delta_size);
 #endif
-#endif
+  }
 #if WABT_BIG_ENDIAN
   memmove(new_data + new_size - old_size, new_data, old_size);
   memset(new_data, 0, delta_size);
@@ -387,7 +405,7 @@ static uint64_t grow_memory_impl(wasm_rt_memory_t* memory, uint64_t delta) {
 }
 
 uint64_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint64_t delta) {
-  uint64_t ret = grow_memory_impl(memory, delta);
+  uint64_t ret = wasm_rt_grow_memory_helper(memory, delta, WASM_RT_USE_MMAP);
 #ifdef WASM_RT_GROW_FAILED_HANDLER
   if (ret == -1) {
     WASM_RT_GROW_FAILED_HANDLER();
@@ -396,12 +414,25 @@ uint64_t wasm_rt_grow_memory(wasm_rt_memory_t* memory, uint64_t delta) {
   return ret;
 }
 
+uint64_t wasm_rt_grow_memory_sw_checked(wasm_rt_memory_t* memory,
+                                        uint64_t delta) {
+  return wasm_rt_grow_memory_helper(memory, delta, false);
+}
+
+void wasm_rt_free_memory_hw_checked(wasm_rt_memory_t* memory) {
+  const uint64_t mmap_size = get_allocation_size_for_mmap(memory);
+  os_munmap(memory->data, mmap_size);  // ignore error?
+}
+
+void wasm_rt_free_memory_sw_checked(wasm_rt_memory_t* memory) {
+  free(memory->data);
+}
+
 void wasm_rt_free_memory(wasm_rt_memory_t* memory) {
 #if WASM_RT_USE_MMAP
-  const uint64_t mmap_size = get_allocation_size_for_mmap(memory);
-  os_munmap(memory->data, mmap_size); // ignore error
+  wasm_rt_free_memory_hw_checked(memory);
 #else
-  free(memory->data);
+  wasm_rt_free_memory_sw_checked(memory);
 #endif
 }
 

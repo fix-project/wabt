@@ -414,6 +414,11 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t*,
                              uint64_t max_pages,
                              bool is64);
 
+extern void wasm_rt_allocate_memory_sw_checked(wasm_rt_memory_t*,
+                                               uint64_t initial_pages,
+                                               uint64_t max_pages,
+                                               bool is64);
+
 /**
  * Grow a Memory object by `pages`, and return the previous page count. If
  * this new page count is greater than the maximum page count, the grow fails
@@ -431,10 +436,15 @@ void wasm_rt_allocate_memory(wasm_rt_memory_t*,
  */
 uint64_t wasm_rt_grow_memory(wasm_rt_memory_t*, uint64_t pages);
 
+extern uint64_t wasm_rt_grow_memory_sw_checked(wasm_rt_memory_t*,
+                                               uint64_t pages);
+
 /**
  * Free a Memory object.
  */
 void wasm_rt_free_memory(wasm_rt_memory_t*);
+
+extern void wasm_rt_free_memory_sw_checked(wasm_rt_memory_t*);
 
 /**
  * Initialize a funcref Table object with an element count of `elements` and a

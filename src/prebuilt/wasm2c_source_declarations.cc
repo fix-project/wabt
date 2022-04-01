@@ -151,14 +151,41 @@ R"w2c_template(    wasm_asm("" ::"r"(result));                                  
 )w2c_template"
 R"w2c_template(    return (t3)(t2)result;                                             \
 )w2c_template"
+R"w2c_template(  }                                                                    \
+)w2c_template"
+R"w2c_template(  static inline t3 name##_checked(wasm_rt_memory_t* mem, u64 addr) {   \
+)w2c_template"
+R"w2c_template(    RANGE_CHECK(mem, addr, sizeof(t1));                                \
+)w2c_template"
+R"w2c_template(    t1 result;                                                         \
+)w2c_template"
+R"w2c_template(    wasm_rt_memcpy(&result, &mem->data[mem->size - addr - sizeof(t1)], \
+)w2c_template"
+R"w2c_template(                   sizeof(t1));                                        \
+)w2c_template"
+R"w2c_template(    return (t3)(t2)result;                                             \
+)w2c_template"
 R"w2c_template(  }
 )w2c_template"
-R"w2c_template(
-#define DEFINE_STORE(name, t1, t2)                                      \
+R"w2c_template(#define DEFINE_STORE(name, t1, t2)                                      \
 )w2c_template"
 R"w2c_template(  static inline void name(wasm_rt_memory_t* mem, u64 addr, t2 value) {  \
 )w2c_template"
 R"w2c_template(    MEMCHECK(mem, addr, t1);                                            \
+)w2c_template"
+R"w2c_template(    t1 wrapped = (t1)value;                                             \
+)w2c_template"
+R"w2c_template(    wasm_rt_memcpy(&mem->data[mem->size - addr - sizeof(t1)], &wrapped, \
+)w2c_template"
+R"w2c_template(                   sizeof(t1));                                         \
+)w2c_template"
+R"w2c_template(  }                                                                     \
+)w2c_template"
+R"w2c_template(  static inline void name##_checked(wasm_rt_memory_t* mem, u64 addr,    \
+)w2c_template"
+R"w2c_template(                                    t2 value) {                         \
+)w2c_template"
+R"w2c_template(    RANGE_CHECK(mem, addr, sizeof(t1));                                 \
 )w2c_template"
 R"w2c_template(    t1 wrapped = (t1)value;                                             \
 )w2c_template"
@@ -192,19 +219,31 @@ R"w2c_template(    load_data(&(m.data[o]), i, s); \
 )w2c_template"
 R"w2c_template(  } while (0)
 )w2c_template"
-R"w2c_template(#define DEFINE_LOAD(name, t1, t2, t3)                      \
+R"w2c_template(#define DEFINE_LOAD(name, t1, t2, t3)                                \
 )w2c_template"
-R"w2c_template(  static inline t3 name(wasm_rt_memory_t* mem, u64 addr) { \
+R"w2c_template(  static inline t3 name(wasm_rt_memory_t* mem, u64 addr) {           \
 )w2c_template"
-R"w2c_template(    MEMCHECK(mem, addr, t1);                               \
+R"w2c_template(    MEMCHECK(mem, addr, t1);                                         \
 )w2c_template"
-R"w2c_template(    t1 result;                                             \
+R"w2c_template(    t1 result;                                                       \
 )w2c_template"
-R"w2c_template(    wasm_rt_memcpy(&result, &mem->data[addr], sizeof(t1)); \
+R"w2c_template(    wasm_rt_memcpy(&result, &mem->data[addr], sizeof(t1));           \
 )w2c_template"
-R"w2c_template(    wasm_asm("" ::"r"(result));                            \
+R"w2c_template(    wasm_asm("" ::"r"(result));                                      \
 )w2c_template"
-R"w2c_template(    return (t3)(t2)result;                                 \
+R"w2c_template(    return (t3)(t2)result;                                           \
+)w2c_template"
+R"w2c_template(  }                                                                  \
+)w2c_template"
+R"w2c_template(  static inline t3 name##_checked(wasm_rt_memory_t* mem, u64 addr) { \
+)w2c_template"
+R"w2c_template(    RANGE_CHECK(mem, addr, sizeof(t1));                              \
+)w2c_template"
+R"w2c_template(    t1 result;                                                       \
+)w2c_template"
+R"w2c_template(    wasm_rt_memcpy(&result, &mem->data[addr], sizeof(t1));           \
+)w2c_template"
+R"w2c_template(    return (t3)(t2)result;                                           \
 )w2c_template"
 R"w2c_template(  }
 )w2c_template"
@@ -214,6 +253,18 @@ R"w2c_template(
 R"w2c_template(  static inline void name(wasm_rt_memory_t* mem, u64 addr, t2 value) { \
 )w2c_template"
 R"w2c_template(    MEMCHECK(mem, addr, t1);                                           \
+)w2c_template"
+R"w2c_template(    t1 wrapped = (t1)value;                                            \
+)w2c_template"
+R"w2c_template(    wasm_rt_memcpy(&mem->data[addr], &wrapped, sizeof(t1));            \
+)w2c_template"
+R"w2c_template(  }                                                                    \
+)w2c_template"
+R"w2c_template(  static inline void name##_checked(wasm_rt_memory_t* mem, u64 addr,   \
+)w2c_template"
+R"w2c_template(                                    t2 value) {                        \
+)w2c_template"
+R"w2c_template(    RANGE_CHECK(mem, addr, sizeof(t1));                                \
 )w2c_template"
 R"w2c_template(    t1 wrapped = (t1)value;                                            \
 )w2c_template"
