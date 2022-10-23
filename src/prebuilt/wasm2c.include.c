@@ -31,6 +31,7 @@ const char SECTION_NAME(declarations)[] =
 "#define UNREACHABLE TRAP(UNREACHABLE)\n"
 "\n"
 "#define CALL_INDIRECT(table, t, ft, x, ...)          \\\n"
+"  fixpoint_create_blob_i32(x);                       \\\n"
 "  (LIKELY((x) < table.size && table.data[x].func &&  \\\n"
 "          table.data[x].func_type == func_types[ft]) \\\n"
 "       || TRAP(CALL_INDIRECT)                        \\\n"
