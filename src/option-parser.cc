@@ -233,10 +233,13 @@ void OptionParser::Parse(int argc, char* argv[]) {
           if (option.short_name && arg[k] == option.short_name) {
             const char* option_argument = nullptr;
             if (option.has_argument) {
-              // A short option with a required argument cannot be followed
-              // by other short options_.
+              // Treat anything following a short option as the argument to
+              // its call back function.
               if (arg[k + 1] != '\0') {
-                Errorf("option '-%c' requires argument", option.short_name);
+                option_argument = arg + k + 1;
+                option.callback(option_argument);
+                matched = true;
+                k = strlen(arg) - 1;
                 break;
               }
 

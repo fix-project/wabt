@@ -102,23 +102,6 @@ TEST(OptionParser, MissingArgument) {
   EXPECT_EQ(error, "prog: expected arg argument." ERROR_ENDING);
 }
 
-TEST(OptionParser, FlagCombinedAfterShortParam) {
-  std::string error;
-  std::string param;
-  bool has_x = false;
-
-  OptionParser parser("prog", "desc");
-  parser.SetErrorCallback([&](const char* msg) { error = msg; });
-  parser.AddOption('p', "p", "metavar", "help",
-                   [&](const char* arg) { param = arg; });
-  parser.AddOption('x', "x", "help", [&]() { has_x = true; });
-  const char* args[] = {"prog name", "-px", "stuff"};
-  parser.Parse(3, const_cast<char**>(args));
-  EXPECT_EQ("", param);
-  EXPECT_TRUE(has_x);
-  EXPECT_EQ(error, "prog: unexpected argument 'stuff'" ERROR_ENDING);
-}
-
 TEST(OptionParser, OneArgument) {
   std::string argument;
   OptionParser parser("prog", "desc");
