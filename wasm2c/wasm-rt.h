@@ -17,6 +17,7 @@
 #ifndef WASM_RT_H_
 #define WASM_RT_H_
 
+#include <immintrin.h>
 #include <setjmp.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -58,6 +59,8 @@ extern "C" {
 #else
 #define WASM_RT_THREAD_LOCAL
 #endif
+
+#define WASM_RT_PAGE_SIZE 65536
 
 /**
  * Backward compatibility: Convert the previously exposed
@@ -268,13 +271,16 @@ typedef struct {
 static const wasm_rt_funcref_t wasm_rt_funcref_null_value = {NULL, NULL, NULL};
 
 /** The type of an external reference (opaque to WebAssembly). */
-typedef void* wasm_rt_externref_t;
+typedef __m256i wasm_rt_externref_t;
 
-/** Default (null) value of an externref */
-static const wasm_rt_externref_t wasm_rt_externref_null_value = NULL;
+/** Default (null) value of an externref. Strict accessible blob of size zero. */
+static const wasm_rt_externref_t wasm_rt_externref_null_value = { 0, 0, 0, 4611686018427387904 };
 
 /** A Memory object. */
 typedef struct {
+  wasm_rt_externref_t ref; // Pointer to blob currently attached to memory
+  bool read_only;
+
   /** The linear memory data, with a byte length of `size`. */
   uint8_t* data;
   /** The current and maximum page count for this Memory object. If there is no
@@ -288,6 +294,9 @@ typedef struct {
 
 /** A Table of type funcref. */
 typedef struct {
+  wasm_rt_externref_t ref;
+  bool read_only;
+
   /** The table element data, with an element count of `size`. */
   wasm_rt_funcref_t* data;
   /** The maximum element count of this Table object. If there is no maximum,
@@ -299,6 +308,9 @@ typedef struct {
 
 /** A Table of type externref. */
 typedef struct {
+  wasm_rt_externref_t ref; // Pointer to tree currently attached to table
+  bool read_only;
+
   /** The table element data, with an element count of `size`. */
   wasm_rt_externref_t* data;
   /** The maximum element count of this Table object. If there is no maximum,
