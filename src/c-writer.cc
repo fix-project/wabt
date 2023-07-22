@@ -1389,8 +1389,7 @@ void CWriter::WriteInitExprTerminal(const Expr* expr) {
       } else {
         Write("instance");
       }
-
-      Write("};", Newline());
+      Write("}");
     } break;
 
     case ExprType::RefNull:
