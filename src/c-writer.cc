@@ -3581,10 +3581,26 @@ void CWriter::Write(const ExprList& exprs) {
         break;
       }
 
+      case ExprType::ReturnCall: {
+        const auto inst = cast<ReturnCallExpr>(&expr);
+        Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
+        Write(ExprList{std::make_unique<ReturnExpr>()});
+        return;
+      }
+
+      case ExprType::ReturnCallIndirect: {
+        const auto inst = cast<ReturnCallIndirectExpr>(&expr);
+        auto call_indirect_portion =
+            std::make_unique<CallIndirectExpr>(inst->loc);
+        call_indirect_portion->decl = inst->decl;
+        call_indirect_portion->table = inst->table;
+        Write(ExprList{std::move(call_indirect_portion)});
+        Write(ExprList{std::make_unique<ReturnExpr>()});
+        return;
+      }
+
       case ExprType::AtomicWait:
       case ExprType::AtomicNotify:
-      case ExprType::ReturnCall:
-      case ExprType::ReturnCallIndirect:
       case ExprType::CallRef:
         UNIMPLEMENTED("...");
         break;
