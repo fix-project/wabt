@@ -51,18 +51,23 @@ extern const u8 wasm2c_test_is64_0x5Cmodule_import0x200x2A0x2F;
 
 /* export: '' */
 void w2c_test_(w2c_test*);
+void w2c_test__tailcallee_(w2c_test*);
 
 /* export: '*\2F' */
 void w2c_test_0x2A0x2F(w2c_test*);
+void w2c_test_0x2A0x2F_tailcallee_(w2c_test*);
 
 /* export: '\3F\3F\2F' */
 void w2c_test_0x3F0x3F0x2F(w2c_test*);
+void w2c_test_0x3F0x3F0x2F_tailcallee_(w2c_test*);
 
 /* export: '\0A' */
 void w2c_test_0x0A(w2c_test*);
+void w2c_test_0x0A_tailcallee_(w2c_test*);
 
 /* export: '\E2\9D\A4\EF\B8\8F' */
 void w2c_test_0xE20x9D0xA40xEF0xB80x8F(w2c_test*);
+void w2c_test_0xE20x9D0xA40xEF0xB80x8F_tailcallee_(w2c_test*);
 
 #ifdef __cplusplus
 }
@@ -684,6 +689,7 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static void w2c_test__0(w2c_test*);
+void w2c_test__0_tailcallee_(w2c_test*);
 
 FUNC_TYPE_T(w2c_test_t0) = "\x36\xa9\xe7\xf1\xc9\x5b\x82\xff\xb9\x97\x43\xe0\xc5\xc4\xce\x95\xd8\x3c\x9a\x43\x0a\xac\x59\xf8\x4e\xf3\xcb\xfa\xb6\x14\x50\x68";
 
@@ -750,5 +756,8 @@ wasm_rt_func_type_t wasm2c_test_get_func_type(uint32_t param_count, uint32_t res
 void w2c_test__0(w2c_test* instance) {
   FUNC_PROLOGUE;
   FUNC_EPILOGUE;
+}
+
+void w2c_test__0_tailcallee_(w2c_test* instance) {
 }
 ;;; STDOUT ;;)

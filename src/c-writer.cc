@@ -104,7 +104,8 @@ struct ExternalRef : GlobalName {
 };
 
 struct TailCallRef : GlobalName {
-  using GlobalName::GlobalName;
+  explicit TailCallRef(const std::string& name)
+      : GlobalName(ModuleFieldType::Func, name) {}
 };
 
 struct ExternalInstancePtr : GlobalName {
@@ -409,6 +410,7 @@ class CWriter {
   void WriteImportProperties(CWriterPhase);
   void WriteFuncs();
   void Write(const Func&);
+  void WriteTailCallee(const Func&);
   void WriteParamsAndLocals();
   void WriteParams(const std::vector<std::string>& index_to_name);
   void WriteParamSymbols(const std::vector<std::string>& index_to_name);
@@ -517,7 +519,7 @@ static constexpr char kLabelSuffix = kParamSuffix + 1;
 static constexpr char kGlobalSymbolPrefix[] = "w2c_";
 static constexpr char kLocalSymbolPrefix[] = "var_";
 static constexpr char kAdminSymbolPrefix[] = "wasm2c_";
-static constexpr char kTailCallSymbolPrefix[] = "_w2c_internal_tailcallee_";
+static constexpr char kTailCallSymbolSuffix[] = "_tailcallee_";
 
 size_t CWriter::MarkTypeStack() const {
   return type_stack_.size();
@@ -1082,15 +1084,7 @@ void CWriter::Write(const ExternalRef& name) {
 }
 
 void CWriter::Write(const TailCallRef& name) {
-  if (name.type != ModuleFieldType::Func) {
-    WABT_UNREACHABLE;
-  }
-  bool is_import = import_syms_.count(name.name) != 0;
-  if (is_import) {
-    WABT_UNREACHABLE;
-  }
-
-  Write(kTailCallSymbolPrefix, static_cast<GlobalName>(name));
+  Write(static_cast<GlobalName>(name), kTailCallSymbolSuffix);
 }
 
 void CWriter::Write(const ExternalInstanceRef& name) {
@@ -1399,7 +1393,8 @@ void CWriter::WriteInitExprTerminal(const Expr* expr) {
 
       Write("(wasm_rt_funcref_t){", FuncTypeExpr(func_type), ", ",
             "(wasm_rt_function_ptr_t)",
-            ExternalRef(ModuleFieldType::Func, func->name), ", ");
+            ExternalRef(ModuleFieldType::Func, func->name),
+            ", (wasm_rt_function_ptr_t)", TailCallRef(func->name), ", ");
 
       if (IsImport(func->name)) {
         Write("instance->", GlobalName(ModuleFieldType::Import,
@@ -1806,6 +1801,12 @@ void CWriter::WriteFuncDeclaration(const FuncDeclaration& decl,
   Write(ResultType(decl.sig.result_types), " ", name, "(");
   Write(ModuleInstanceTypeName(), "*");
   WriteParamTypes(decl);
+  Write(");", Newline());
+
+  Write(ResultType(decl.sig.result_types), " ", name, kTailCallSymbolSuffix,
+        "(");
+  Write(ModuleInstanceTypeName(), "*");
+  WriteParamTypes(decl);
   Write(")");
 }
 
@@ -1813,6 +1814,12 @@ void CWriter::WriteImportFuncDeclaration(const FuncDeclaration& decl,
                                          const std::string& module_name,
                                          const std::string& name) {
   Write(ResultType(decl.sig.result_types), " ", name, "(");
+  Write("struct ", ModuleInstanceTypeName(module_name), "*");
+  WriteParamTypes(decl);
+  Write(");", Newline());
+
+  Write(ResultType(decl.sig.result_types), " ", name, kTailCallSymbolSuffix,
+        "(");
   Write("struct ", ModuleInstanceTypeName(module_name), "*");
   WriteParamTypes(decl);
   Write(")");
@@ -2171,7 +2178,8 @@ void CWriter::WriteElemInitializers() {
           const Func* func = module_->GetFunc(cast<RefFuncExpr>(&expr)->var);
           const FuncType* func_type = module_->GetFuncType(func->decl.type_var);
           Write("{", FuncTypeExpr(func_type), ", (wasm_rt_function_ptr_t)",
-                ExternalRef(ModuleFieldType::Func, func->name), ", ");
+                ExternalRef(ModuleFieldType::Func, func->name),
+                ", (wasm_rt_function_ptr_t)", TailCallRef(func->name), ", ");
           if (IsImport(func->name)) {
             Write("offsetof(", ModuleInstanceTypeName(), ", ",
                   GlobalName(ModuleFieldType::Import,
@@ -2621,6 +2629,7 @@ void CWriter::WriteFuncs() {
     if (!is_import) {
       stream_ = c_streams_.at(c_stream_assignment.at(func_index));
       Write(*func);
+      WriteTailCallee(*func);
     }
     ++func_index;
   }
@@ -2673,6 +2682,70 @@ void CWriter::Write(const Func& func) {
   Write("FUNC_EPILOGUE;", Newline());
 
   // Return the top of the stack implicitly.
+  Index num_results = func.GetNumResults();
+  if (num_results == 1) {
+    Write("return ", StackVar(0), ";", Newline());
+  } else if (num_results >= 2) {
+    Write(OpenBrace());
+    Write(ResultType(func.decl.sig.result_types), " tmp;", Newline());
+    for (Index i = 0; i < num_results; ++i) {
+      Type type = func.GetResultType(i);
+      Writef("tmp.%c%d = ", MangleType(type), i);
+      Write(StackVar(num_results - i - 1), ";", Newline());
+    }
+    Write("return tmp;", Newline());
+    Write(CloseBrace(), Newline());
+  }
+
+  stream_ = prev_stream;
+
+  for (size_t i = 0; i < func_sections_.size(); ++i) {
+    auto& [condition, stream] = func_sections_.at(i);
+    std::unique_ptr<OutputBuffer> buf = stream.ReleaseOutputBuffer();
+    if (condition.empty() || func_includes_.count(condition)) {
+      stream_->WriteData(buf->data.data(), buf->data.size());
+    }
+
+    if (i == 0) {
+      WriteStackVarDeclarations();  // these come immediately after section #0
+                                    // (return type/name/params/locals)
+    }
+  }
+
+  Write(CloseBrace(), Newline());
+
+  func_ = nullptr;
+}
+
+void CWriter::WriteTailCallee(const Func& func) {
+  func_ = &func;
+  local_syms_.clear();
+  local_sym_map_.clear();
+  stack_var_sym_map_.clear();
+  func_sections_.clear();
+  func_includes_.clear();
+
+  Stream* prev_stream = stream_;
+
+  Write(Newline());
+
+  PushFuncSection();
+  Write(ResultType(func.decl.sig.result_types), " ", TailCallRef(func.name),
+        "(");
+  WriteParamsAndLocals();  // XXX
+
+  PushFuncSection();
+
+  std::string label = DefineLabelName(kImplicitFuncLabel);
+  ResetTypeStack(0);
+  std::string empty;  // Must not be temporary, since address is taken by Label.
+  PushLabel(LabelType::Func, empty, func.decl.sig);
+  Write(func.exprs, LabelDecl(label));
+  PopLabel();
+  ResetTypeStack(0);
+  PushTypes(func.decl.sig.result_types);
+
+  // Return the top of the stack implicitly. (XXX)
   Index num_results = func.GetNumResults();
   if (num_results == 1) {
     Write("return ", StackVar(0), ";", Newline());
@@ -3399,7 +3472,8 @@ void CWriter::Write(const ExprList& exprs) {
 
         Write(StackVar(0), " = (wasm_rt_funcref_t){", FuncTypeExpr(func_type),
               ", (wasm_rt_function_ptr_t)",
-              ExternalRef(ModuleFieldType::Func, func->name), ", ");
+              ExternalRef(ModuleFieldType::Func, func->name),
+              ", (wasm_rt_function_ptr_t)", TailCallRef(func->name), ", ");
 
         if (IsImport(func->name)) {
           Write("instance->", GlobalName(ModuleFieldType::Import,
