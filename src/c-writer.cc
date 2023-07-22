@@ -94,8 +94,9 @@ struct GlobalName {
   const std::string& name;
 };
 
-struct ExternalPtr : GlobalName {
-  using GlobalName::GlobalName;
+struct TagPtr : GlobalName {
+  explicit TagPtr(const std::string& name)
+      : GlobalName(ModuleFieldType::Tag, name) {}
 };
 
 struct ExternalRef : GlobalName {
@@ -334,7 +335,7 @@ class CWriter {
   void Write(const ParamName&);
   void Write(const LabelName&);
   void Write(const GlobalName&);
-  void Write(const ExternalPtr&);
+  void Write(const TagPtr&);
   void Write(const ExternalRef&);
   void Write(const ExternalInstancePtr&);
   void Write(const ExternalInstanceRef&);
@@ -1052,7 +1053,7 @@ void CWriter::Write(const GlobalName& name) {
   Write(GetGlobalName(name.type, name.name));
 }
 
-void CWriter::Write(const ExternalPtr& name) {
+void CWriter::Write(const TagPtr& name) {
   if (!IsImport(name.name)) {
     Write("&");
   }
@@ -1067,10 +1068,10 @@ void CWriter::Write(const ExternalInstancePtr& name) {
 }
 
 void CWriter::Write(const ExternalRef& name) {
-  if (IsImport(name.name)) {
-    Write("(*", GlobalName(name), ")");
-  } else {
+  if (name.type == ModuleFieldType::Func or not IsImport(name.name)) {
     Write(GlobalName(name));
+  } else {
+    Write("(*", GlobalName(name), ")");
   }
 }
 
@@ -1380,7 +1381,7 @@ void CWriter::WriteInitExprTerminal(const Expr* expr) {
 
       Write("(wasm_rt_funcref_t){", FuncTypeExpr(func_type), ", ",
             "(wasm_rt_function_ptr_t)",
-            ExternalPtr(ModuleFieldType::Func, func->name), ", ");
+            ExternalRef(ModuleFieldType::Func, func->name), ", ");
 
       if (IsImport(func->name)) {
         Write("instance->", GlobalName(ModuleFieldType::Import,
@@ -2153,7 +2154,7 @@ void CWriter::WriteElemInitializers() {
           const Func* func = module_->GetFunc(cast<RefFuncExpr>(&expr)->var);
           const FuncType* func_type = module_->GetFuncType(func->decl.type_var);
           Write("{", FuncTypeExpr(func_type), ", (wasm_rt_function_ptr_t)",
-                ExternalPtr(ModuleFieldType::Func, func->name), ", ");
+                ExternalRef(ModuleFieldType::Func, func->name), ", ");
           if (IsImport(func->name)) {
             Write("offsetof(", ModuleInstanceTypeName(), ", ",
                   GlobalName(ModuleFieldType::Import,
@@ -2381,8 +2382,7 @@ void CWriter::WriteExports(CWriterPhase kind) {
         break;
 
       case ExternalKind::Tag:
-        Write("= ", ExternalPtr(ModuleFieldType::Tag, internal_name), ";",
-              Newline());
+        Write("= ", TagPtr(internal_name), ";", Newline());
         break;
 
       default:
@@ -2904,9 +2904,8 @@ void CWriter::Write(const Catch& c) {
     return;
   }
 
-  Write("if (wasm_rt_exception_tag() == ",
-        ExternalPtr(ModuleFieldType::Tag, module_->GetTag(c.var)->name), ") ",
-        OpenBrace());
+  Write("if (wasm_rt_exception_tag() == ", TagPtr(module_->GetTag(c.var)->name),
+        ") ", OpenBrace());
 
   const Tag* tag = module_->GetTag(c.var);
   const FuncDeclaration& tag_type = tag->decl;
@@ -3383,7 +3382,7 @@ void CWriter::Write(const ExprList& exprs) {
 
         Write(StackVar(0), " = (wasm_rt_funcref_t){", FuncTypeExpr(func_type),
               ", (wasm_rt_function_ptr_t)",
-              ExternalPtr(ModuleFieldType::Func, func->name), ", ");
+              ExternalRef(ModuleFieldType::Func, func->name), ", ");
 
         if (IsImport(func->name)) {
           Write("instance->", GlobalName(ModuleFieldType::Import,
@@ -3511,12 +3510,10 @@ void CWriter::Write(const ExprList& exprs) {
 
         Index num_params = tag->decl.GetNumParams();
         if (num_params == 0) {
-          Write("wasm_rt_load_exception(",
-                ExternalPtr(ModuleFieldType::Tag, tag->name), ", 0, NULL);",
+          Write("wasm_rt_load_exception(", TagPtr(tag->name), ", 0, NULL);",
                 Newline());
         } else if (num_params == 1) {
-          Write("wasm_rt_load_exception(",
-                ExternalPtr(ModuleFieldType::Tag, tag->name), ", sizeof(",
+          Write("wasm_rt_load_exception(", TagPtr(tag->name), ", sizeof(",
                 tag->decl.GetParamType(0), "), &", StackVar(0), ");",
                 Newline());
         } else {
@@ -3527,8 +3524,7 @@ void CWriter::Write(const ExprList& exprs) {
             Write(StackVar(i), ", ");
           }
           Write("};", Newline());
-          Write("wasm_rt_load_exception(",
-                ExternalPtr(ModuleFieldType::Tag, tag->name),
+          Write("wasm_rt_load_exception(", TagPtr(tag->name),
                 ", sizeof(tmp), &tmp);", Newline());
           Write(CloseBrace(), Newline());
         }

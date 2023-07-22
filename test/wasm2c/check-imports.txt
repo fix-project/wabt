@@ -694,7 +694,7 @@ static void init_memories(w2c_test* instance) {
 }
 
 static const wasm_elem_segment_expr_t elem_segment_exprs_w2c_test_e0[] = {
-  {w2c_test_t1, (wasm_rt_function_ptr_t)&w2c_test_f1, 0},
+  {w2c_test_t1, (wasm_rt_function_ptr_t)w2c_test_f1, 0},
 };
 
 static void init_tables(w2c_test* instance) {
