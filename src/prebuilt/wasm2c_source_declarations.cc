@@ -922,6 +922,8 @@ R"w2c_template(  wasm_rt_func_type_t type;
 )w2c_template"
 R"w2c_template(  wasm_rt_function_ptr_t func;
 )w2c_template"
+R"w2c_template(  wasm_rt_function_ptr_t func_tailcallee;
+)w2c_template"
 R"w2c_template(  size_t module_offset;
 )w2c_template"
 R"w2c_template(} wasm_elem_segment_expr_t;
@@ -953,11 +955,11 @@ R"w2c_template(  for (u32 i = 0; i < n; i++) {
 )w2c_template"
 R"w2c_template(    const wasm_elem_segment_expr_t* src_expr = &src[src_addr + i];
 )w2c_template"
-R"w2c_template(    dest->data[dest_addr + i] =
+R"w2c_template(    dest->data[dest_addr + i] = (wasm_rt_funcref_t){
 )w2c_template"
-R"w2c_template(        (wasm_rt_funcref_t){src_expr->type, src_expr->func,
+R"w2c_template(        src_expr->type, src_expr->func, src_expr->func_tailcallee,
 )w2c_template"
-R"w2c_template(                            (char*)module_instance + src_expr->module_offset};
+R"w2c_template(        (char*)module_instance + src_expr->module_offset};
 )w2c_template"
 R"w2c_template(  }
 )w2c_template"

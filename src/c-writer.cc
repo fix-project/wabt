@@ -103,6 +103,10 @@ struct ExternalRef : GlobalName {
   using GlobalName::GlobalName;
 };
 
+struct TailCallRef : GlobalName {
+  using GlobalName::GlobalName;
+};
+
 struct ExternalInstancePtr : GlobalName {
   using GlobalName::GlobalName;
 };
@@ -337,6 +341,7 @@ class CWriter {
   void Write(const GlobalName&);
   void Write(const TagPtr&);
   void Write(const ExternalRef&);
+  void Write(const TailCallRef&);
   void Write(const ExternalInstancePtr&);
   void Write(const ExternalInstanceRef&);
   void Write(Type);
@@ -512,6 +517,7 @@ static constexpr char kLabelSuffix = kParamSuffix + 1;
 static constexpr char kGlobalSymbolPrefix[] = "w2c_";
 static constexpr char kLocalSymbolPrefix[] = "var_";
 static constexpr char kAdminSymbolPrefix[] = "wasm2c_";
+static constexpr char kTailCallSymbolPrefix[] = "_w2c_internal_tailcallee_";
 
 size_t CWriter::MarkTypeStack() const {
   return type_stack_.size();
@@ -1073,6 +1079,18 @@ void CWriter::Write(const ExternalRef& name) {
   } else {
     Write("(*", GlobalName(name), ")");
   }
+}
+
+void CWriter::Write(const TailCallRef& name) {
+  if (name.type != ModuleFieldType::Func) {
+    WABT_UNREACHABLE;
+  }
+  bool is_import = import_syms_.count(name.name) != 0;
+  if (is_import) {
+    WABT_UNREACHABLE;
+  }
+
+  Write(kTailCallSymbolPrefix, static_cast<GlobalName>(name));
 }
 
 void CWriter::Write(const ExternalInstanceRef& name) {

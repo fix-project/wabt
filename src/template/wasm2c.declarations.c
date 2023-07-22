@@ -493,6 +493,7 @@ static inline void memory_init(wasm_rt_memory_t* dest,
 typedef struct {
   wasm_rt_func_type_t type;
   wasm_rt_function_ptr_t func;
+  wasm_rt_function_ptr_t func_tailcallee;
   size_t module_offset;
 } wasm_elem_segment_expr_t;
 
@@ -509,9 +510,9 @@ static inline void funcref_table_init(wasm_rt_funcref_table_t* dest,
     TRAP(OOB);
   for (u32 i = 0; i < n; i++) {
     const wasm_elem_segment_expr_t* src_expr = &src[src_addr + i];
-    dest->data[dest_addr + i] =
-        (wasm_rt_funcref_t){src_expr->type, src_expr->func,
-                            (char*)module_instance + src_expr->module_offset};
+    dest->data[dest_addr + i] = (wasm_rt_funcref_t){
+        src_expr->type, src_expr->func, src_expr->func_tailcallee,
+        (char*)module_instance + src_expr->module_offset};
   }
 }
 
