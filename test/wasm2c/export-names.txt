@@ -689,7 +689,7 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static void w2c_test__0(w2c_test*);
-void w2c_test__0_tailcallee_(w2c_test*);
+static void w2c_test__0_tailcallee_(w2c_test*);
 
 FUNC_TYPE_T(w2c_test_t0) = "\x36\xa9\xe7\xf1\xc9\x5b\x82\xff\xb9\x97\x43\xe0\xc5\xc4\xce\x95\xd8\x3c\x9a\x43\x0a\xac\x59\xf8\x4e\xf3\xcb\xfa\xb6\x14\x50\x68";
 
