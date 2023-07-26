@@ -306,6 +306,7 @@ class CWriter {
 
   std::string GetGlobalName(ModuleFieldType, const std::string&) const;
   std::string GetLocalName(const std::string&, bool is_label) const;
+  std::string GetTailCallRef(const std::string&) const;
 
   void Indent(int size = INDENT_SIZE);
   void Dedent(int size = INDENT_SIZE);
@@ -939,6 +940,10 @@ std::string CWriter::GetLocalName(const std::string& name,
   return local_sym_map_.at(mangled);
 }
 
+std::string CWriter::GetTailCallRef(const std::string& name) const {
+  return GetGlobalName(ModuleFieldType::Func, name) + kTailCallSymbolSuffix;
+}
+
 std::string CWriter::DefineParamName(std::string_view name) {
   return DefineLocalScopeName(name, false);
 }
@@ -1084,7 +1089,7 @@ void CWriter::Write(const ExternalRef& name) {
 }
 
 void CWriter::Write(const TailCallRef& name) {
-  Write(static_cast<GlobalName>(name), kTailCallSymbolSuffix);
+  Write(GetTailCallRef(name.name));
 }
 
 void CWriter::Write(const ExternalInstanceRef& name) {
@@ -1767,6 +1772,12 @@ void CWriter::WriteImports() {
           ExportName(import->module_name, import->field_name));
       Write(";");
       Write(Newline());
+      WriteImportFuncDeclaration(
+          func.decl, import->module_name,
+          ExportName(import->module_name,
+                     import->field_name + kTailCallSymbolSuffix));
+      Write(";");
+      Write(Newline());
     } else if (import->kind() == ExternalKind::Tag) {
       Write(Newline(), "/* import: '", SanitizeForComment(import->module_name),
             "' '", SanitizeForComment(import->field_name), "' */", Newline());
@@ -1790,6 +1801,10 @@ void CWriter::WriteFuncDeclarations() {
       Write(InternalSymbolScope());
       WriteFuncDeclaration(
           func->decl, DefineGlobalScopeName(ModuleFieldType::Func, func->name));
+      Write(";", Newline());
+
+      Write(InternalSymbolScope());
+      WriteFuncDeclaration(func->decl, GetTailCallRef(func->name));
       Write(";", Newline());
     }
     ++func_index;
