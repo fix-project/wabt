@@ -62,18 +62,15 @@ wasm_rt_func_type_t wasm2c_test_get_func_type(uint32_t param_count, uint32_t res
 
 /* import: 'wasi_snapshot_preview1' 'fd_write' */
 u32 w2c_wasi__snapshot__preview1_fd_write(struct w2c_wasi__snapshot__preview1*, u32, u32, u32, u32);
-u32 w2c_wasi__snapshot__preview1_fd_write_tailcallee_(struct w2c_wasi__snapshot__preview1*, u32, u32, u32, u32);
 
 /* import: 'wasi_snapshot_preview1' 'proc_exit' */
 void w2c_wasi__snapshot__preview1_proc_exit(struct w2c_wasi__snapshot__preview1*, u32);
-void w2c_wasi__snapshot__preview1_proc_exit_tailcallee_(struct w2c_wasi__snapshot__preview1*, u32);
 
 /* export: 'memory' */
 wasm_rt_memory_t* w2c_test_memory(w2c_test* instance);
 
 /* export: '_start' */
 void w2c_test_0x5Fstart(w2c_test*);
-void w2c_test_0x5Fstart_tailcallee_(w2c_test*);
 
 #ifdef __cplusplus
 }
@@ -695,7 +692,6 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static void w2c_test_0x5Fstart_0(w2c_test*);
-static void w2c_test_0x5Fstart_0_tailcallee_(w2c_test*);
 
 FUNC_TYPE_T(w2c_test_t0) = "\xf6\x98\x1b\xc6\x10\xda\xb7\xb2\x63\x37\xcd\xdc\x72\xca\xe9\x50\x00\x13\xba\x10\x6c\xde\x87\x27\x10\xf8\x86\x2f\xe3\xdb\x94\xe4";
 FUNC_TYPE_T(w2c_test_t1) = "\x89\x3a\x3d\x2c\x8f\x4d\x7f\x6d\x6c\x9d\x62\x67\x29\xaf\x3d\x44\x39\x8e\xc3\xf3\xe8\x51\xc1\x99\xb9\xdd\x9f\xd5\x3d\x1f\xd3\xe4";

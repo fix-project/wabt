@@ -371,10 +371,6 @@ class CWriter {
   void BeginInstance();
   void WriteImports();
   void WriteFuncDeclarations();
-  void WriteRawFuncDeclaration(const std::string& scope,
-                               const FuncDeclaration& decl,
-                               const std::string& module_type_name,
-                               const std::string& func_name);
   void WriteFuncDeclaration(const std::string&,
                             const FuncDeclaration&,
                             const std::string&);
@@ -1802,34 +1798,22 @@ void CWriter::WriteFuncDeclarations() {
   }
 }
 
-void CWriter::WriteRawFuncDeclaration(const std::string& scope,
-                                      const FuncDeclaration& decl,
-                                      const std::string& module_type_name,
-                                      const std::string& func_name) {
-  Write(scope, ResultType(decl.sig.result_types), " ", func_name, "(",
-        module_type_name, "*");
-  WriteParamTypes(decl);
-  Write(")");
-}
-
 void CWriter::WriteFuncDeclaration(const std::string& scope,
                                    const FuncDeclaration& decl,
                                    const std::string& name) {
-  WriteRawFuncDeclaration(scope, decl, ModuleInstanceTypeName(), name);
-  Write(";", Newline());
-  WriteRawFuncDeclaration(scope, decl, ModuleInstanceTypeName(),
-                          name + kTailCallSymbolSuffix);
+  Write(scope, ResultType(decl.sig.result_types), " ", name, "(",
+        ModuleInstanceTypeName(), "*");
+  WriteParamTypes(decl);
+  Write(")");
 }
 
 void CWriter::WriteImportFuncDeclaration(const FuncDeclaration& decl,
                                          const std::string& module_name,
                                          const std::string& name) {
-  WriteRawFuncDeclaration(
-      "", decl, "struct " + ModuleInstanceTypeName(module_name), name);
-  Write(";", Newline());
-  WriteRawFuncDeclaration("", decl,
-                          "struct " + ModuleInstanceTypeName(module_name),
-                          name + kTailCallSymbolSuffix);
+  Write(ResultType(decl.sig.result_types), " ", name, "(struct ",
+        ModuleInstanceTypeName(module_name), "*");
+  WriteParamTypes(decl);
+  Write(")");
 }
 
 void CWriter::WriteCallIndirectFuncDeclaration(const FuncDeclaration& decl,

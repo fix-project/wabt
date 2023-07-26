@@ -40,7 +40,6 @@ wasm_rt_func_type_t wasm2c_test_get_func_type(uint32_t param_count, uint32_t res
 
 /* export: 'add' */
 u32 w2c_test_add(w2c_test*, u32, u32);
-u32 w2c_test_add_tailcallee_(w2c_test*, u32, u32);
 
 #ifdef __cplusplus
 }
@@ -662,7 +661,6 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static u32 w2c_test_add_0(w2c_test*, u32, u32);
-static u32 w2c_test_add_0_tailcallee_(w2c_test*, u32, u32);
 
 FUNC_TYPE_T(w2c_test_t0) = "\x92\xfb\x6a\xdf\x49\x07\x0a\x83\xbe\x08\x02\x68\xcd\xf6\x95\x27\x4a\xc2\xf3\xe5\xe4\x7d\x29\x49\xe8\xed\x42\x92\x6a\x9d\xda\xf0";
 
