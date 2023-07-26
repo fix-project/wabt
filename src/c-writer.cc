@@ -371,9 +371,7 @@ class CWriter {
   void BeginInstance();
   void WriteImports();
   void WriteFuncDeclarations();
-  void WriteFuncDeclaration(const std::string&,
-                            const FuncDeclaration&,
-                            const std::string&);
+  void WriteFuncDeclaration(const FuncDeclaration&, const std::string&);
   void WriteImportFuncDeclaration(const FuncDeclaration&,
                                   const std::string& module_name,
                                   const std::string&);
@@ -1789,19 +1787,18 @@ void CWriter::WriteFuncDeclarations() {
   for (const Func* func : module_->funcs) {
     bool is_import = func_index < module_->num_func_imports;
     if (!is_import) {
+      Write(InternalSymbolScope());
       WriteFuncDeclaration(
-          InternalSymbolScope(), func->decl,
-          DefineGlobalScopeName(ModuleFieldType::Func, func->name));
+          func->decl, DefineGlobalScopeName(ModuleFieldType::Func, func->name));
       Write(";", Newline());
     }
     ++func_index;
   }
 }
 
-void CWriter::WriteFuncDeclaration(const std::string& scope,
-                                   const FuncDeclaration& decl,
+void CWriter::WriteFuncDeclaration(const FuncDeclaration& decl,
                                    const std::string& name) {
-  Write(scope, ResultType(decl.sig.result_types), " ", name, "(",
+  Write(ResultType(decl.sig.result_types), " ", name, "(",
         ModuleInstanceTypeName(), "*");
   WriteParamTypes(decl);
   Write(")");
@@ -1810,8 +1807,8 @@ void CWriter::WriteFuncDeclaration(const std::string& scope,
 void CWriter::WriteImportFuncDeclaration(const FuncDeclaration& decl,
                                          const std::string& module_name,
                                          const std::string& name) {
-  Write(ResultType(decl.sig.result_types), " ", name, "(struct ",
-        ModuleInstanceTypeName(module_name), "*");
+  Write(ResultType(decl.sig.result_types), " ", name, "(");
+  Write("struct ", ModuleInstanceTypeName(module_name), "*");
   WriteParamTypes(decl);
   Write(")");
 }
@@ -2295,7 +2292,7 @@ void CWriter::WriteExports(CWriterPhase kind) {
         const Func* func = module_->GetFunc(export_->var);
         internal_name = func->name;
         if (kind == CWriterPhase::Declarations) {
-          WriteFuncDeclaration("", func->decl, mangled_name);
+          WriteFuncDeclaration(func->decl, mangled_name);
         } else {
           func_ = func;
           local_syms_ = global_syms_;
