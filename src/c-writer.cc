@@ -532,6 +532,7 @@ static constexpr char kGlobalSymbolPrefix[] = "w2c_";
 static constexpr char kLocalSymbolPrefix[] = "var_";
 static constexpr char kAdminSymbolPrefix[] = "wasm2c_";
 static constexpr char kTailCallSymbolPrefix[] = "wasm2c_tailcall_";
+static constexpr unsigned int kTailCallStackSize = 1024;
 
 size_t CWriter::MarkTypeStack() const {
   return type_stack_.size();
@@ -683,16 +684,17 @@ std::string CWriter::ExportName(std::string_view module_name,
 
 /* The C symbol for a tail-callee export from this module. */
 std::string CWriter::TailCallExportName(std::string_view export_name) {
-  return std::string(kTailCallSymbolPrefix) + kGlobalSymbolPrefix +
-         module_prefix_ + '_' + MangleName(export_name);
+  return kTailCallSymbolPrefix + std::to_string(kTailCallStackSize) + '_' +
+         kGlobalSymbolPrefix + module_prefix_ + '_' + MangleName(export_name);
 }
 
 /* The C symbol for a tail-callee export from an arbitrary module. */
 // static
 std::string CWriter::TailCallExportName(std::string_view module_name,
                                         std::string_view export_name) {
-  return std::string(kTailCallSymbolPrefix) + kGlobalSymbolPrefix +
-         MangleModuleName(module_name) + '_' + MangleName(export_name);
+  return kTailCallSymbolPrefix + std::to_string(kTailCallStackSize) + '_' +
+         kGlobalSymbolPrefix + MangleModuleName(module_name) + '_' +
+         MangleName(export_name);
 }
 
 /* The type name of an instance of this module. */
@@ -966,7 +968,8 @@ std::string CWriter::GetLocalName(const std::string& name,
 }
 
 std::string CWriter::GetTailCallRef(const std::string& name) const {
-  return kTailCallSymbolPrefix + GetGlobalName(ModuleFieldType::Func, name);
+  return kTailCallSymbolPrefix + std::to_string(kTailCallStackSize) + '_' +
+         GetGlobalName(ModuleFieldType::Func, name);
 }
 
 std::string CWriter::DefineParamName(std::string_view name) {
