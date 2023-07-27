@@ -403,7 +403,8 @@ class CWriter {
   void WriteExports(CWriterPhase);
   void WriteFunctionExporterTop(const std::string&, std::vector<std::string>&);
   void WriteFunctionExporterBody(const std::string&,
-                                 const std::vector<std::string>&);
+                                 const std::vector<std::string>&,
+                                 const std::string&);
   void WriteInitDecl();
   void WriteFreeDecl();
   void WriteGetFuncTypeDecl();
@@ -2293,6 +2294,14 @@ void CWriter::WriteElemTableInit(bool active_initialization,
   Write(");", Newline());
 }
 
+/**
+ *
+ * WriteFunctionExporterTop and Body produce a "function exporter":
+ * a short stub function (under the name of the export) that forwards the
+ * arguments to the internal function and returns its result to the caller.
+ *
+ **/
+
 void CWriter::WriteFunctionExporterTop(
     const std::string& mangled_name,
     std::vector<std::string>& index_to_name) {
@@ -2307,9 +2316,10 @@ void CWriter::WriteFunctionExporterTop(
 
 void CWriter::WriteFunctionExporterBody(
     const std::string& internal_name,
-    const std::vector<std::string>& index_to_name) {
+    const std::vector<std::string>& index_to_name,
+    const std::string& real_function_name) {
   Write(OpenBrace());
-  Write("return ", ExternalRef(ModuleFieldType::Func, internal_name), "(");
+  Write("return ", real_function_name, "(");
 
   if (IsImport(internal_name)) {
     Write("instance->", GlobalName(ModuleFieldType::Import,
@@ -2392,7 +2402,13 @@ void CWriter::WriteExports(CWriterPhase kind) {
     Write(" ");
     switch (export_->kind) {
       case ExternalKind::Func: {
-        WriteFunctionExporterBody(internal_name, index_to_name);
+        WriteFunctionExporterBody(
+            internal_name, index_to_name,
+            GetGlobalName(ModuleFieldType::Func, internal_name));
+        WriteFunctionExporterTop(mangled_name + kTailCallSymbolSuffix,
+                                 index_to_name);
+        WriteFunctionExporterBody(internal_name, index_to_name,
+                                  GetTailCallRef(internal_name));
         func_ = nullptr;
         break;
       }
