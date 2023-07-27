@@ -401,10 +401,13 @@ class CWriter {
   void WriteElemInitializers();
   void WriteElemTableInit(bool, const ElemSegment*, const Table*);
   void WriteExports(CWriterPhase);
-  void WriteFunctionExporterTop(const std::string&, std::vector<std::string>&);
+  void WriteTailCallExports(CWriterPhase);
+  void WriteFunctionExporterTop(const Func*,
+                                const std::string&,
+                                std::vector<std::string>&);
   void WriteFunctionExporterBody(const std::string&,
                                  const std::vector<std::string>&,
-                                 const std::string&);
+                                 bool);
   void WriteInitDecl();
   void WriteFreeDecl();
   void WriteGetFuncTypeDecl();
@@ -2303,35 +2306,46 @@ void CWriter::WriteElemTableInit(bool active_initialization,
  **/
 
 void CWriter::WriteFunctionExporterTop(
-    const std::string& mangled_name,
-    std::vector<std::string>& index_to_name) {
-  local_syms_ = global_syms_;
+    const Func* func,
+    const std::string& mangled_export_name,
+    std::vector<std::string>& param_index_to_name) {
+  func_ = func;
+  local_syms_.clear();
   local_sym_map_.clear();
   stack_var_sym_map_.clear();
-  Write(ResultType(func_->decl.sig.result_types), " ", mangled_name, "(");
+  func_sections_.clear();
+  func_includes_.clear();
+
+  Write(ResultType(func_->decl.sig.result_types), " ", mangled_export_name,
+        "(");
   MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
-                                &index_to_name);
-  WriteParams(index_to_name);
+                                &param_index_to_name);
+  WriteParams(param_index_to_name);
 }
 
 void CWriter::WriteFunctionExporterBody(
     const std::string& internal_name,
-    const std::vector<std::string>& index_to_name,
-    const std::string& real_function_name) {
+    const std::vector<std::string>& param_index_to_name,
+    bool is_tail_callee) {
   Write(OpenBrace());
-  Write("return ", real_function_name, "(");
+  Write("return ");
+  if (is_tail_callee) {
+    Write(TailCallRef(internal_name));
+  } else {
+    Write(GlobalName(ModuleFieldType::Func, internal_name));
+  }
+  Write("(");
 
   if (IsImport(internal_name)) {
     Write("instance->", GlobalName(ModuleFieldType::Import,
-                                   import_module_sym_map_[internal_name]));
+                                   import_module_sym_map_.at(internal_name)));
   } else {
     Write("instance");
   }
-  WriteParamSymbols(index_to_name);
+  WriteParamSymbols(param_index_to_name);
   Write(CloseBrace(), Newline());
 
-  local_sym_map_.clear();
-  stack_var_sym_map_.clear();
+  func_ = nullptr;
 }
 
 void CWriter::WriteExports(CWriterPhase kind) {
@@ -2353,8 +2367,7 @@ void CWriter::WriteExports(CWriterPhase kind) {
         if (kind == CWriterPhase::Declarations) {
           WriteFuncDeclaration(func->decl, mangled_name);
         } else {
-          func_ = func;
-          WriteFunctionExporterTop(mangled_name, index_to_name);
+          WriteFunctionExporterTop(func, mangled_name, index_to_name);
         }
         break;
       }
@@ -2402,14 +2415,7 @@ void CWriter::WriteExports(CWriterPhase kind) {
     Write(" ");
     switch (export_->kind) {
       case ExternalKind::Func: {
-        WriteFunctionExporterBody(
-            internal_name, index_to_name,
-            GetGlobalName(ModuleFieldType::Func, internal_name));
-        WriteFunctionExporterTop(mangled_name + kTailCallSymbolSuffix,
-                                 index_to_name);
-        WriteFunctionExporterBody(internal_name, index_to_name,
-                                  GetTailCallRef(internal_name));
-        func_ = nullptr;
+        WriteFunctionExporterBody(internal_name, index_to_name, false);
         break;
       }
 
@@ -2443,6 +2449,30 @@ void CWriter::WriteExports(CWriterPhase kind) {
 
       default:
         WABT_UNREACHABLE;
+    }
+  }
+}
+
+void CWriter::WriteTailCallExports(CWriterPhase kind) {
+  for (const Export* export_ : module_->exports) {
+    if (export_->kind != ExternalKind::Func) {
+      continue;
+    }
+
+    const std::string mangled_name =
+        ExportName(export_->name) + kTailCallSymbolSuffix;
+    const Func* func = module_->GetFunc(export_->var);
+
+    Write(Newline(), "/* export for tail-call of '",
+          SanitizeForComment(export_->name), "' */", Newline());
+    if (kind == CWriterPhase::Declarations) {
+      WriteFuncDeclaration(func->decl, mangled_name);
+      Write(";", Newline());
+    } else {
+      std::vector<std::string> index_to_name;
+      WriteFunctionExporterTop(func, mangled_name, index_to_name);
+      Write(" ");
+      WriteFunctionExporterBody(func->name, index_to_name, true);
     }
   }
 }
@@ -5504,6 +5534,7 @@ void CWriter::WriteCHeader() {
   WriteImports();
   WriteImportProperties(CWriterPhase::Declarations);
   WriteExports(CWriterPhase::Declarations);
+  WriteTailCallExports(CWriterPhase::Declarations);
   Write(Newline());
   Write(s_header_bottom);
   Write(Newline(), "#endif  /* ", guard, " */", Newline());
@@ -5532,6 +5563,7 @@ void CWriter::WriteCSource() {
   WriteDataInitializers();
   WriteElemInitializers();
   WriteExports(CWriterPhase::Definitions);
+  WriteTailCallExports(CWriterPhase::Definitions);
   WriteInitInstanceImport();
   WriteImportProperties(CWriterPhase::Definitions);
   WriteInit();
