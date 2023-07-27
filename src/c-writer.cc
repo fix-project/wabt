@@ -401,6 +401,9 @@ class CWriter {
   void WriteElemInitializers();
   void WriteElemTableInit(bool, const ElemSegment*, const Table*);
   void WriteExports(CWriterPhase);
+  void WriteFunctionExporterTop(const std::string&, std::vector<std::string>&);
+  void WriteFunctionExporterBody(const std::string&,
+                                 const std::vector<std::string>&);
   void WriteInitDecl();
   void WriteFreeDecl();
   void WriteGetFuncTypeDecl();
@@ -1774,8 +1777,8 @@ void CWriter::WriteImports() {
       Write(Newline());
       WriteImportFuncDeclaration(
           func.decl, import->module_name,
-          ExportName(import->module_name,
-                     import->field_name + kTailCallSymbolSuffix));
+          ExportName(import->module_name, import->field_name) +
+              kTailCallSymbolSuffix);
       Write(";");
       Write(Newline());
     } else if (import->kind() == ExternalKind::Tag) {
@@ -2290,6 +2293,37 @@ void CWriter::WriteElemTableInit(bool active_initialization,
   Write(");", Newline());
 }
 
+void CWriter::WriteFunctionExporterTop(
+    const std::string& mangled_name,
+    std::vector<std::string>& index_to_name) {
+  local_syms_ = global_syms_;
+  local_sym_map_.clear();
+  stack_var_sym_map_.clear();
+  Write(ResultType(func_->decl.sig.result_types), " ", mangled_name, "(");
+  MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
+                                &index_to_name);
+  WriteParams(index_to_name);
+}
+
+void CWriter::WriteFunctionExporterBody(
+    const std::string& internal_name,
+    const std::vector<std::string>& index_to_name) {
+  Write(OpenBrace());
+  Write("return ", ExternalRef(ModuleFieldType::Func, internal_name), "(");
+
+  if (IsImport(internal_name)) {
+    Write("instance->", GlobalName(ModuleFieldType::Import,
+                                   import_module_sym_map_[internal_name]));
+  } else {
+    Write("instance");
+  }
+  WriteParamSymbols(index_to_name);
+  Write(CloseBrace(), Newline());
+
+  local_sym_map_.clear();
+  stack_var_sym_map_.clear();
+}
+
 void CWriter::WriteExports(CWriterPhase kind) {
   if (module_->exports.empty())
     return;
@@ -2310,14 +2344,7 @@ void CWriter::WriteExports(CWriterPhase kind) {
           WriteFuncDeclaration(func->decl, mangled_name);
         } else {
           func_ = func;
-          local_syms_ = global_syms_;
-          local_sym_map_.clear();
-          stack_var_sym_map_.clear();
-          Write(ResultType(func_->decl.sig.result_types), " ", mangled_name,
-                "(");
-          MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(),
-                                        func_->bindings, &index_to_name);
-          WriteParams(index_to_name);
+          WriteFunctionExporterTop(mangled_name, index_to_name);
         }
         break;
       }
@@ -2365,22 +2392,7 @@ void CWriter::WriteExports(CWriterPhase kind) {
     Write(" ");
     switch (export_->kind) {
       case ExternalKind::Func: {
-        Write(OpenBrace());
-        Write("return ", ExternalRef(ModuleFieldType::Func, internal_name),
-              "(");
-
-        if (IsImport(internal_name)) {
-          Write("instance->",
-                GlobalName(ModuleFieldType::Import,
-                           import_module_sym_map_[internal_name]));
-        } else {
-          Write("instance");
-        }
-        WriteParamSymbols(index_to_name);
-        Write(CloseBrace(), Newline());
-
-        local_sym_map_.clear();
-        stack_var_sym_map_.clear();
+        WriteFunctionExporterBody(internal_name, index_to_name);
         func_ = nullptr;
         break;
       }
