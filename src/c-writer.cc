@@ -273,9 +273,12 @@ class CWriter {
   static std::string Mangle(std::string_view name, bool double_underscores);
   static std::string MangleName(std::string_view);
   static std::string MangleModuleName(std::string_view);
-  std::string ExportName(std::string_view module_name,
-                         std::string_view export_name);
+  static std::string ExportName(std::string_view module_name,
+                                std::string_view export_name);
   std::string ExportName(std::string_view export_name);
+  static std::string TailCallExportName(std::string_view module_name,
+                                        std::string_view export_name);
+  std::string TailCallExportName(std::string_view export_name);
   std::string ModuleInstanceTypeName() const;
   static std::string ModuleInstanceTypeName(std::string_view module_name);
   void ClaimName(SymbolSet& set,
@@ -528,7 +531,7 @@ static constexpr char kLabelSuffix = kParamSuffix + 1;
 static constexpr char kGlobalSymbolPrefix[] = "w2c_";
 static constexpr char kLocalSymbolPrefix[] = "var_";
 static constexpr char kAdminSymbolPrefix[] = "wasm2c_";
-static constexpr char kTailCallSymbolSuffix[] = "_tailcallee_";
+static constexpr char kTailCallSymbolPrefix[] = "wasm2c_tailcall_";
 
 size_t CWriter::MarkTypeStack() const {
   return type_stack_.size();
@@ -676,6 +679,20 @@ std::string CWriter::ExportName(std::string_view module_name,
                                 std::string_view export_name) {
   return kGlobalSymbolPrefix + MangleModuleName(module_name) + '_' +
          MangleName(export_name);
+}
+
+/* The C symbol for a tail-callee export from this module. */
+std::string CWriter::TailCallExportName(std::string_view export_name) {
+  return std::string(kTailCallSymbolPrefix) + kGlobalSymbolPrefix +
+         module_prefix_ + '_' + MangleName(export_name);
+}
+
+/* The C symbol for a tail-callee export from an arbitrary module. */
+// static
+std::string CWriter::TailCallExportName(std::string_view module_name,
+                                        std::string_view export_name) {
+  return std::string(kTailCallSymbolPrefix) + kGlobalSymbolPrefix +
+         MangleModuleName(module_name) + '_' + MangleName(export_name);
 }
 
 /* The type name of an instance of this module. */
@@ -949,7 +966,7 @@ std::string CWriter::GetLocalName(const std::string& name,
 }
 
 std::string CWriter::GetTailCallRef(const std::string& name) const {
-  return GetGlobalName(ModuleFieldType::Func, name) + kTailCallSymbolSuffix;
+  return kTailCallSymbolPrefix + GetGlobalName(ModuleFieldType::Func, name);
 }
 
 std::string CWriter::DefineParamName(std::string_view name) {
@@ -1782,8 +1799,7 @@ void CWriter::WriteImports() {
       Write(Newline());
       WriteImportFuncDeclaration(
           func.decl, import->module_name,
-          ExportName(import->module_name, import->field_name) +
-              kTailCallSymbolSuffix);
+          TailCallExportName(import->module_name, import->field_name));
       Write(";");
       Write(Newline());
     } else if (import->kind() == ExternalKind::Tag) {
@@ -1809,8 +1825,7 @@ void CWriter::WriteTailCallWeakImports() {
     Write("__attribute__((weak)) ");
     WriteImportFuncDeclaration(
         func.decl, import->module_name,
-        ExportName(import->module_name, import->field_name) +
-            kTailCallSymbolSuffix);
+        TailCallExportName(import->module_name, import->field_name));
     Write(" ", OpenBrace(), "TRAP(UNHANDLED_TAIL_CALL);", Newline(),
           CloseBrace(), Newline());
   }
@@ -2480,8 +2495,7 @@ void CWriter::WriteTailCallExports(CWriterPhase kind) {
       continue;
     }
 
-    const std::string mangled_name =
-        ExportName(export_->name) + kTailCallSymbolSuffix;
+    const std::string mangled_name = TailCallExportName(export_->name);
     const Func* func = module_->GetFunc(export_->var);
 
     Write(Newline(), "/* export for tail-call of '",
