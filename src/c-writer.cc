@@ -371,6 +371,7 @@ class CWriter {
   void ComputeUniqueImports();
   void BeginInstance();
   void WriteImports();
+  void WriteTailCallWeakImports();
   void WriteFuncDeclarations();
   void WriteFuncDeclaration(const FuncDeclaration&, const std::string&);
   void WriteImportFuncDeclaration(const FuncDeclaration&,
@@ -1792,6 +1793,26 @@ void CWriter::WriteImports() {
             ExportName(import->module_name, import->field_name), ";",
             Newline());
     }
+  }
+}
+
+void CWriter::WriteTailCallWeakImports() {
+  for (const Import* import : unique_imports_) {
+    if (import->kind() != ExternalKind::Func) {
+      continue;
+    }
+
+    Write(Newline(), "/* handler for missing tail-call on import: '",
+          SanitizeForComment(import->module_name), "' '",
+          SanitizeForComment(import->field_name), "' */", Newline());
+    const Func& func = cast<FuncImport>(import)->func;
+    Write("__attribute__((weak)) ");
+    WriteImportFuncDeclaration(
+        func.decl, import->module_name,
+        ExportName(import->module_name, import->field_name) +
+            kTailCallSymbolSuffix);
+    Write(" ", OpenBrace(), "TRAP(UNHANDLED_TAIL_CALL);", Newline(),
+          CloseBrace(), Newline());
   }
 }
 
@@ -5564,6 +5585,7 @@ void CWriter::WriteCSource() {
   WriteElemInitializers();
   WriteExports(CWriterPhase::Definitions);
   WriteTailCallExports(CWriterPhase::Definitions);
+  WriteTailCallWeakImports();
   WriteInitInstanceImport();
   WriteImportProperties(CWriterPhase::Definitions);
   WriteInit();

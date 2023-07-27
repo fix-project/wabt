@@ -74,6 +74,9 @@ wasm_rt_memory_t* w2c_test_memory(w2c_test* instance);
 /* export: '_start' */
 void w2c_test_0x5Fstart(w2c_test*);
 
+/* export for tail-call of '_start' */
+void w2c_test_0x5Fstart_tailcallee_(w2c_test*);
+
 #ifdef __cplusplus
 }
 #endif
@@ -733,6 +736,21 @@ wasm_rt_memory_t* w2c_test_memory(w2c_test* instance) {
 /* export: '_start' */
 void w2c_test_0x5Fstart(w2c_test* instance) {
   return w2c_test_0x5Fstart_0(instance);
+}
+
+/* export for tail-call of '_start' */
+void w2c_test_0x5Fstart_tailcallee_(w2c_test* instance) {
+  return w2c_test_0x5Fstart_0_tailcallee_(instance);
+}
+
+/* handler for missing tail-call on import: 'wasi_snapshot_preview1' 'fd_write' */
+__attribute__((weak)) u32 w2c_wasi__snapshot__preview1_fd_write_tailcallee_(struct w2c_wasi__snapshot__preview1*, u32, u32, u32, u32) {
+  TRAP(UNHANDLED_TAIL_CALL);
+}
+
+/* handler for missing tail-call on import: 'wasi_snapshot_preview1' 'proc_exit' */
+__attribute__((weak)) void w2c_wasi__snapshot__preview1_proc_exit_tailcallee_(struct w2c_wasi__snapshot__preview1*, u32) {
+  TRAP(UNHANDLED_TAIL_CALL);
 }
 
 static void init_instance_import(w2c_test* instance, struct w2c_wasi__snapshot__preview1* w2c_wasi__snapshot__preview1_instance){

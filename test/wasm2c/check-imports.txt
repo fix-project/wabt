@@ -684,8 +684,11 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static u32 w2c_test_f0(w2c_test*, u32);
+static u32 w2c_test_f0_tailcallee_(w2c_test*, u32);
 static u32 w2c_test_f1(w2c_test*);
+static u32 w2c_test_f1_tailcallee_(w2c_test*);
 static u32 w2c_test_f2(w2c_test*, u32, u32);
+static u32 w2c_test_f2_tailcallee_(w2c_test*, u32, u32);
 
 FUNC_TYPE_T(w2c_test_t0) = "\x07\x80\x96\x7a\x42\xf7\x3e\xe6\x70\x5c\x2f\xac\x83\xf5\x67\xd2\xa2\xa0\x69\x41\x5f\xf8\xe7\x96\x7f\x23\xab\x00\x03\x5f\x4a\x3c";
 FUNC_TYPE_T(w2c_test_t1) = "\x72\xab\x00\xdf\x20\x3d\xce\xa1\xf2\x29\xc7\x9d\x13\x40\x7e\x98\xac\x7d\x41\x4a\x53\x2e\x42\x42\x61\x55\x2e\xaa\xeb\xbe\xc6\x35";

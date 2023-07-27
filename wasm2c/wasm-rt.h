@@ -218,7 +218,10 @@ typedef enum {
   WASM_RT_TRAP_UNREACHABLE,        /** Unreachable instruction executed. */
   WASM_RT_TRAP_CALL_INDIRECT,      /** Invalid call_indirect, for any reason. */
   WASM_RT_TRAP_UNCAUGHT_EXCEPTION, /* Exception thrown and not caught. */
-  WASM_RT_TRAP_UNALIGNED, /** Unaligned atomic instruction executed. */
+  WASM_RT_TRAP_UNALIGNED,          /** Unaligned atomic instruction executed. */
+  WASM_RT_TRAP_UNHANDLED_TAIL_CALL, /** Tail call made to host function or
+                                       wasm2c-generated module that doesn't
+                                       provide tail-call handler */
 #if WASM_RT_MERGED_OOB_AND_EXHAUSTION_TRAPS
   WASM_RT_TRAP_EXHAUSTION = WASM_RT_TRAP_OOB,
 #else

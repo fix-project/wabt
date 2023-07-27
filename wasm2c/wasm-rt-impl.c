@@ -419,6 +419,8 @@ const char* wasm_rt_strerror(wasm_rt_trap_t trap) {
       return "Uncaught exception";
     case WASM_RT_TRAP_UNALIGNED:
       return "Unaligned atomic memory access";
+    case WASM_RT_TRAP_UNHANDLED_TAIL_CALL:
+      return "Host function or imported module lacks support for tail calls";
   }
   return "invalid trap code";
 }
