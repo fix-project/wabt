@@ -364,7 +364,9 @@ class CWriter {
   void WriteSourceTop();
   void WriteMultiCTop();
   void WriteMultiCTopEmpty();
-  void WriteMultivalueTypes();
+  void WriteMultivalueType(const TypeVector&);
+  void WriteMultivalueParamTypes();
+  void WriteMultivalueResultTypes();
   void WriteTagTypes();
   void WriteFuncTypeDecls();
   void WriteFuncTypes();
@@ -377,6 +379,7 @@ class CWriter {
   void WriteTailCallWeakImports();
   void WriteFuncDeclarations();
   void WriteFuncDeclaration(const FuncDeclaration&, const std::string&);
+  void WriteTailCallFuncDeclaration(const std::string&, const std::string&);
   void WriteImportFuncDeclaration(const FuncDeclaration&,
                                   const std::string& module_name,
                                   const std::string&);
@@ -1495,26 +1498,37 @@ void CWriter::WriteMultiCTopEmpty() {
   }
 }
 
-void CWriter::WriteMultivalueTypes() {
+void CWriter::WriteMultivalueType(const TypeVector& types) {
+  const std::string name = MangleMultivalueTypes(types);
+  // these ifndefs are actually to support importing multiple modules
+  // incidentally they also mean we don't have to bother with deduplication
+  Write(Newline(), "#ifndef ", name, Newline());
+  Write("#define ", name, " ", name, Newline());
+  Write("struct ", name, " ", OpenBrace());
+  for (Index i = 0; i < types.size(); ++i) {
+    const Type type = types[i];
+    Write(type);
+    Writef(" %c%d;", MangleType(type), i);
+    Write(Newline());
+  }
+  Write(CloseBrace(), ";", Newline(), "#endif  /* ", name, " */", Newline());
+}
+
+void CWriter::WriteMultivalueResultTypes() {
   for (TypeEntry* type : module_->types) {
     FuncType* func_type = cast<FuncType>(type);
-    Index num_results = func_type->GetNumResults();
-    if (num_results <= 1) {
-      continue;
+    if (func_type->GetNumResults() > 1) {
+      WriteMultivalueType(func_type->sig.result_types);
     }
-    std::string name = MangleMultivalueTypes(func_type->sig.result_types);
-    // these ifndefs are actually to support importing multiple modules
-    // incidentally they also mean we don't have to bother with deduplication
-    Write("#ifndef ", name, Newline());
-    Write("#define ", name, " ", name, Newline());
-    Write("struct ", name, " ", OpenBrace());
-    for (Index i = 0; i < num_results; ++i) {
-      Type type = func_type->GetResultType(i);
-      Write(type);
-      Writef(" %c%d;", MangleType(type), i);
-      Write(Newline());
+  }
+}
+
+void CWriter::WriteMultivalueParamTypes() {
+  for (TypeEntry* type : module_->types) {
+    FuncType* func_type = cast<FuncType>(type);
+    if (func_type->GetNumParams() > 1) {
+      WriteMultivalueType(func_type->sig.param_types);
     }
-    Write(CloseBrace(), ";", Newline(), "#endif  /* ", name, " */", Newline());
   }
 }
 
@@ -1863,6 +1877,13 @@ void CWriter::WriteFuncDeclaration(const FuncDeclaration& decl,
         ModuleInstanceTypeName(), "*");
   WriteParamTypes(decl);
   Write(")");
+}
+
+void CWriter::WriteTailCallFuncDeclaration(
+    const std::string& mangled_name,
+    const std::string& module_instance_type) {
+  Write("void ", mangled_name, "(", module_instance_type,
+        "*instance, void *tail_call_stack, wasm_rt_function_ptr_t* next)");
 }
 
 void CWriter::WriteImportFuncDeclaration(const FuncDeclaration& decl,
@@ -2829,12 +2850,18 @@ void CWriter::WriteTailCallee(const Func& func) {
   Write(Newline());
 
   PushFuncSection();
-  Write(ResultType(func.decl.sig.result_types), " ", TailCallRef(func.name),
-        "(");
-  WriteParamsAndLocals();  // XXX
+  WriteTailCallFuncDeclaration(GetTailCallRef(func.name),
+                               ModuleInstanceTypeName());
+  Write(" ", OpenBrace());
+  std::vector<std::string> index_to_name;
+  MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
+                                &index_to_name);
+
+  //  WriteParamsAndLocals();  // XXX
 
   PushFuncSection();
 
+#if 0
   std::string label = DefineLabelName(kImplicitFuncLabel);
   ResetTypeStack(0);
   std::string empty;  // Must not be temporary, since address is taken by Label.
@@ -2843,6 +2870,7 @@ void CWriter::WriteTailCallee(const Func& func) {
   PopLabel();
   ResetTypeStack(0);
   PushTypes(func.decl.sig.result_types);
+#endif
 
   // Return the top of the stack implicitly. (XXX)
   Index num_results = func.GetNumResults();
@@ -5568,7 +5596,7 @@ void CWriter::WriteCHeader() {
   WriteInitDecl();
   WriteFreeDecl();
   WriteGetFuncTypeDecl();
-  WriteMultivalueTypes();
+  WriteMultivalueResultTypes();
   WriteImports();
   WriteImportProperties(CWriterPhase::Declarations);
   WriteExports(CWriterPhase::Declarations);
@@ -5596,6 +5624,7 @@ void CWriter::WriteCSource() {
   stream_ = c_streams_.front();
   WriteMultiCTop();
   WriteFuncTypes();
+  WriteMultivalueParamTypes();
   WriteTags();
   WriteGlobalInitializers();
   WriteDataInitializers();
@@ -5658,16 +5687,16 @@ const char* CWriter::InternalSymbolScope() const {
 
 }  // end anonymous namespace
 
-Result WriteC(std::vector<Stream*>&& c_streams,
-              Stream* h_stream,
-              Stream* h_impl_stream,
-              const char* header_name,
-              const char* header_impl_name,
-              const Module* module,
-              const WriteCOptions& options) {
+  Result WriteC(std::vector<Stream*>&& c_streams,
+                Stream* h_stream,
+                Stream* h_impl_stream,
+                const char* header_name,
+                const char* header_impl_name,
+                const Module* module,
+                const WriteCOptions& options) {
   CWriter c_writer(std::move(c_streams), h_stream, h_impl_stream, header_name,
                    header_impl_name, options);
   return c_writer.WriteModule(*module);
-}
+  }
 
 }  // namespace wabt
