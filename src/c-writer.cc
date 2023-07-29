@@ -1413,8 +1413,8 @@ void CWriter::WriteInitExprTerminal(const Expr* expr) {
 
       Write("(wasm_rt_funcref_t){", FuncTypeExpr(func_type), ", ",
             "(wasm_rt_function_ptr_t)",
-            ExternalRef(ModuleFieldType::Func, func->name),
-            ", (wasm_rt_function_ptr_t)", TailCallRef(func->name), ", ");
+            ExternalRef(ModuleFieldType::Func, func->name), ", {",
+            TailCallRef(func->name), "}, ");
 
       if (IsImport(func->name)) {
         Write("instance->", GlobalName(ModuleFieldType::Import,
@@ -1849,8 +1849,8 @@ void CWriter::WriteFuncDeclaration(const FuncDeclaration& decl,
 
 void CWriter::WriteTailCallFuncDeclaration(const std::string& mangled_name) {
   Write("void ", mangled_name,
-        "(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* "
-        "next)");
+        "(void **instance_ptr, void *tail_call_stack, wasm_rt_tailcallee_t "
+        "*next)");
 }
 
 void CWriter::WriteImportFuncDeclaration(const FuncDeclaration& decl,
@@ -2215,8 +2215,8 @@ void CWriter::WriteElemInitializers() {
           const Func* func = module_->GetFunc(cast<RefFuncExpr>(&expr)->var);
           const FuncType* func_type = module_->GetFuncType(func->decl.type_var);
           Write("{", FuncTypeExpr(func_type), ", (wasm_rt_function_ptr_t)",
-                ExternalRef(ModuleFieldType::Func, func->name),
-                ", (wasm_rt_function_ptr_t)", TailCallRef(func->name), ", ");
+                ExternalRef(ModuleFieldType::Func, func->name), ", {",
+                TailCallRef(func->name), "}, ");
           if (IsImport(func->name)) {
             Write("offsetof(", ModuleInstanceTypeName(), ", ",
                   GlobalName(ModuleFieldType::Import,
@@ -2865,7 +2865,7 @@ void CWriter::WriteTailCallee(const Func& func) {
     }
     Write(CloseBrace(), Newline());
   }
-  Write("*next = NULL;", Newline());
+  Write("next->fn = NULL;", Newline());
 
   stream_ = prev_stream;
 
@@ -3578,8 +3578,8 @@ void CWriter::Write(const ExprList& exprs) {
 
         Write(StackVar(0), " = (wasm_rt_funcref_t){", FuncTypeExpr(func_type),
               ", (wasm_rt_function_ptr_t)",
-              ExternalRef(ModuleFieldType::Func, func->name),
-              ", (wasm_rt_function_ptr_t)", TailCallRef(func->name), ", ");
+              ExternalRef(ModuleFieldType::Func, func->name), ", {",
+              TailCallRef(func->name), "}, ");
 
         if (IsImport(func->name)) {
           Write("instance->", GlobalName(ModuleFieldType::Import,
@@ -3794,8 +3794,7 @@ void CWriter::Write(const ExprList& exprs) {
           }
 
           const Func& func = *module_->GetFunc(inst->var);
-          Write("*next = (wasm_rt_function_ptr_t)",
-                TailCallRef(inst->var.name()), ";", Newline());
+          Write("next->fn = ", TailCallRef(inst->var.name()), ";", Newline());
         } else {
           Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
           Write(ExprList{std::make_unique<ReturnExpr>()});

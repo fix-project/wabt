@@ -922,7 +922,7 @@ R"w2c_template(  wasm_rt_func_type_t type;
 )w2c_template"
 R"w2c_template(  wasm_rt_function_ptr_t func;
 )w2c_template"
-R"w2c_template(  wasm_rt_function_ptr_t func_tailcallee;
+R"w2c_template(  wasm_rt_tailcallee_t func_tailcallee;
 )w2c_template"
 R"w2c_template(  size_t module_offset;
 )w2c_template"

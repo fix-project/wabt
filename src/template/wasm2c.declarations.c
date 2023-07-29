@@ -493,7 +493,7 @@ static inline void memory_init(wasm_rt_memory_t* dest,
 typedef struct {
   wasm_rt_func_type_t type;
   wasm_rt_function_ptr_t func;
-  wasm_rt_function_ptr_t func_tailcallee;
+  wasm_rt_tailcallee_t func_tailcallee;
   size_t module_offset;
 } wasm_elem_segment_expr_t;
 
