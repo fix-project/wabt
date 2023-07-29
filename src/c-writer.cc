@@ -5629,16 +5629,16 @@ const char* CWriter::InternalSymbolScope() const {
 
 }  // end anonymous namespace
 
-  Result WriteC(std::vector<Stream*>&& c_streams,
-                Stream* h_stream,
-                Stream* h_impl_stream,
-                const char* header_name,
-                const char* header_impl_name,
-                const Module* module,
-                const WriteCOptions& options) {
+Result WriteC(std::vector<Stream*>&& c_streams,
+              Stream* h_stream,
+              Stream* h_impl_stream,
+              const char* header_name,
+              const char* header_impl_name,
+              const Module* module,
+              const WriteCOptions& options) {
   CWriter c_writer(std::move(c_streams), h_stream, h_impl_stream, header_name,
                    header_impl_name, options);
   return c_writer.WriteModule(*module);
-  }
+}
 
 }  // namespace wabt
