@@ -2400,8 +2400,10 @@ void CWriter::WriteExports(CWriterPhase kind) {
     switch (export_->kind) {
       case ExternalKind::Func: {
         Write(OpenBrace());
-        Write("return ", ExternalRef(ModuleFieldType::Func, internal_name),
-              "(");
+        if (func_->GetNumResults() > 0) {
+          Write("return ");
+        }
+        Write(ExternalRef(ModuleFieldType::Func, internal_name), "(");
 
         if (IsImport(internal_name)) {
           Write("instance->",
@@ -2467,8 +2469,11 @@ void CWriter::WriteTailCallExports(CWriterPhase kind) {
       WriteTailCallFuncDeclaration(mangled_name);
       Write(";", Newline());
     } else {
-      std::vector<std::string> index_to_name;
-      /* XXX */
+      WriteTailCallFuncDeclaration(mangled_name);
+      Write(" ", OpenBrace());
+      const Func* func = module_->GetFunc(export_->var);
+      Write(TailCallRef(func->name), "(instance_ptr, tail_call_stack, next);",
+            Newline(), CloseBrace());
     }
   }
 }
@@ -3780,21 +3785,43 @@ void CWriter::Write(const ExprList& exprs) {
       }
 
       case ExprType::ReturnCall: {
+        const Label* label = FindLabel(Var(label_stack_.size() - 1, {}));
+        assert(try_catch_stack_.size() >= label->try_catch_stack_size);
+
+        if (try_catch_stack_.size() != label->try_catch_stack_size) {
+          const std::string& name =
+              try_catch_stack_.at(label->try_catch_stack_size).name;
+
+          Write("wasm_rt_set_unwind_target(", name, "_outer_target);",
+                Newline());
+        }
+
         const auto inst = cast<ReturnCallExpr>(&expr);
         if (in_tail_callee_) {
-          const Label* label = FindLabel(Var(label_stack_.size() - 1, {}));
-          assert(try_catch_stack_.size() >= label->try_catch_stack_size);
-
-          if (try_catch_stack_.size() != label->try_catch_stack_size) {
-            const std::string& name =
-                try_catch_stack_.at(label->try_catch_stack_size).name;
-
-            Write("wasm_rt_set_unwind_target(", name, "_outer_target);",
-                  Newline());
-          }
-
           const Func& func = *module_->GetFunc(inst->var);
-          Write("next->fn = ", TailCallRef(inst->var.name()), ";", Newline());
+          const Index num_params = func.GetNumParams();
+          if (num_params == 1) {
+            Write("wasm_rt_memcpy(tail_call_stack, &", StackVar(0), ", sizeof(",
+                  StackVar(0), "));", Newline());
+          } else if (num_params >= 2) {
+            Write(OpenBrace());
+            Write("struct ", MangleMultivalueTypes(func.decl.sig.param_types),
+                  " *tmp = tail_call_stack;", Newline());
+            for (Index i = 0; i < num_params; ++i) {
+              Type type = func.GetParamType(i);
+              Writef("tmp->%c%d = ", MangleType(type), i);
+              Write(StackVar(num_params - i - 1), ";", Newline());
+            }
+            Write(CloseBrace(), Newline());
+          }
+          Write("next->fn = ", TailCallRef(func.name), ";", Newline());
+          if (IsImport(func.name)) {
+            Write("*instance_ptr = ",
+                  GlobalName(ModuleFieldType::Import,
+                             import_module_sym_map_.at(func.name)),
+                  ";", Newline());
+          }
+          Write("return;", Newline());
         } else {
           Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
           Write(ExprList{std::make_unique<ReturnExpr>()});
