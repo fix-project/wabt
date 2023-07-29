@@ -684,21 +684,29 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static u32 w2c_test_f0(w2c_test*, u32);
-static u32 wasm2c_tailcall_w2c_test_f0(w2c_test*, u32);
+static void wasm2c_tailcall_1024_w2c_test_f0(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next);
 static u32 w2c_test_f1(w2c_test*);
-static u32 wasm2c_tailcall_w2c_test_f1(w2c_test*);
+static void wasm2c_tailcall_1024_w2c_test_f1(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next);
 static u32 w2c_test_f2(w2c_test*, u32, u32);
-static u32 wasm2c_tailcall_w2c_test_f2(w2c_test*, u32, u32);
+static void wasm2c_tailcall_1024_w2c_test_f2(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next);
 
 FUNC_TYPE_T(w2c_test_t0) = "\x07\x80\x96\x7a\x42\xf7\x3e\xe6\x70\x5c\x2f\xac\x83\xf5\x67\xd2\xa2\xa0\x69\x41\x5f\xf8\xe7\x96\x7f\x23\xab\x00\x03\x5f\x4a\x3c";
 FUNC_TYPE_T(w2c_test_t1) = "\x72\xab\x00\xdf\x20\x3d\xce\xa1\xf2\x29\xc7\x9d\x13\x40\x7e\x98\xac\x7d\x41\x4a\x53\x2e\x42\x42\x61\x55\x2e\xaa\xeb\xbe\xc6\x35";
 FUNC_TYPE_T(w2c_test_t2) = "\x92\xfb\x6a\xdf\x49\x07\x0a\x83\xbe\x08\x02\x68\xcd\xf6\x95\x27\x4a\xc2\xf3\xe5\xe4\x7d\x29\x49\xe8\xed\x42\x92\x6a\x9d\xda\xf0";
 
+#ifndef wasm_multi_ii
+#define wasm_multi_ii wasm_multi_ii
+struct wasm_multi_ii {
+  u32 i0;
+  u32 i1;
+};
+#endif  /* wasm_multi_ii */
+
 static void init_memories(w2c_test* instance) {
 }
 
 static const wasm_elem_segment_expr_t elem_segment_exprs_w2c_test_e0[] = {
-  {w2c_test_t1, (wasm_rt_function_ptr_t)w2c_test_f1, (wasm_rt_function_ptr_t)wasm2c_tailcall_w2c_test_f1, 0},
+  {w2c_test_t1, (wasm_rt_function_ptr_t)w2c_test_f1, (wasm_rt_function_ptr_t)wasm2c_tailcall_1024_w2c_test_f1, 0},
 };
 
 static void init_tables(w2c_test* instance) {
@@ -772,11 +780,7 @@ u32 w2c_test_f0(w2c_test* instance, u32 var_p0) {
   return var_i0;
 }
 
-u32 wasm2c_tailcall_w2c_test_f0(w2c_test* instance, u32 var_p0) {
-  u32 var_i0;
-  var_i0 = var_p0;
-  var_i0 = CALL_INDIRECT((*instance->w2c_env_0x5F_indirect_function_table), u32 (*)(void*), w2c_test_t1, var_i0, (*instance->w2c_env_0x5F_indirect_function_table).data[var_i0].module_instance);
-  return var_i0;
+void wasm2c_tailcall_1024_w2c_test_f0(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next) {
 }
 
 u32 w2c_test_f1(w2c_test* instance) {
@@ -788,11 +792,7 @@ u32 w2c_test_f1(w2c_test* instance) {
   return var_i0;
 }
 
-u32 wasm2c_tailcall_w2c_test_f1(w2c_test* instance) {
-  u32 var_i0;
-  var_i0 = 16u;
-  var_i0 = i32_load(instance->w2c_env_0x5F_linear_memory, (u64)(var_i0));
-  return var_i0;
+void wasm2c_tailcall_1024_w2c_test_f1(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next) {
 }
 
 u32 w2c_test_f2(w2c_test* instance, u32 var_p0, u32 var_p1) {
@@ -804,10 +804,6 @@ u32 w2c_test_f2(w2c_test* instance, u32 var_p0, u32 var_p1) {
   return var_i0;
 }
 
-u32 wasm2c_tailcall_w2c_test_f2(w2c_test* instance, u32 var_p0, u32 var_p1) {
-  u32 var_i0;
-  var_i0 = 1u;
-  var_i0 = w2c_test_f0(instance, var_i0);
-  return var_i0;
+void wasm2c_tailcall_1024_w2c_test_f2(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next) {
 }
 ;;; STDOUT ;;)

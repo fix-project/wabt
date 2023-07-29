@@ -379,7 +379,7 @@ class CWriter {
   void WriteTailCallWeakImports();
   void WriteFuncDeclarations();
   void WriteFuncDeclaration(const FuncDeclaration&, const std::string&);
-  void WriteTailCallFuncDeclaration(const std::string&, const std::string&);
+  void WriteTailCallFuncDeclaration(const std::string&);
   void WriteImportFuncDeclaration(const FuncDeclaration&,
                                   const std::string& module_name,
                                   const std::string&);
@@ -409,12 +409,6 @@ class CWriter {
   void WriteElemTableInit(bool, const ElemSegment*, const Table*);
   void WriteExports(CWriterPhase);
   void WriteTailCallExports(CWriterPhase);
-  void WriteFunctionExporterTop(const Func*,
-                                const std::string&,
-                                std::vector<std::string>&);
-  void WriteFunctionExporterBody(const std::string&,
-                                 const std::vector<std::string>&,
-                                 bool);
   void WriteInitDecl();
   void WriteFreeDecl();
   void WriteGetFuncTypeDecl();
@@ -688,7 +682,7 @@ std::string CWriter::ExportName(std::string_view module_name,
 /* The C symbol for a tail-callee export from this module. */
 std::string CWriter::TailCallExportName(std::string_view export_name) {
   return kTailCallSymbolPrefix + std::to_string(kTailCallStackSize) + '_' +
-         kGlobalSymbolPrefix + module_prefix_ + '_' + MangleName(export_name);
+         ExportName(export_name);
 }
 
 /* The C symbol for a tail-callee export from an arbitrary module. */
@@ -696,8 +690,7 @@ std::string CWriter::TailCallExportName(std::string_view export_name) {
 std::string CWriter::TailCallExportName(std::string_view module_name,
                                         std::string_view export_name) {
   return kTailCallSymbolPrefix + std::to_string(kTailCallStackSize) + '_' +
-         kGlobalSymbolPrefix + MangleModuleName(module_name) + '_' +
-         MangleName(export_name);
+         ExportName(module_name, export_name);
 }
 
 /* The type name of an instance of this module. */
@@ -1814,11 +1807,8 @@ void CWriter::WriteImports() {
           ExportName(import->module_name, import->field_name));
       Write(";");
       Write(Newline());
-      WriteImportFuncDeclaration(
-          func.decl, import->module_name,
-          TailCallExportName(import->module_name, import->field_name));
-      Write(";");
-      Write(Newline());
+      WriteTailCallFuncDeclaration(GetTailCallRef(func.name));
+      Write(";", Newline());
     } else if (import->kind() == ExternalKind::Tag) {
       Write(Newline(), "/* import: '", SanitizeForComment(import->module_name),
             "' '", SanitizeForComment(import->field_name), "' */", Newline());
@@ -1838,10 +1828,8 @@ void CWriter::WriteTailCallWeakImports() {
     Write(Newline(), "/* handler for missing tail-call on import: '",
           SanitizeForComment(import->module_name), "' '",
           SanitizeForComment(import->field_name), "' */", Newline());
-    const Func& func = cast<FuncImport>(import)->func;
     Write("__attribute__((weak)) ");
-    WriteImportFuncDeclaration(
-        func.decl, import->module_name,
+    WriteTailCallFuncDeclaration(
         TailCallExportName(import->module_name, import->field_name));
     Write(" ", OpenBrace(), "TRAP(UNHANDLED_TAIL_CALL);", Newline(),
           CloseBrace(), Newline());
@@ -1864,7 +1852,7 @@ void CWriter::WriteFuncDeclarations() {
       Write(";", Newline());
 
       Write(InternalSymbolScope());
-      WriteFuncDeclaration(func->decl, GetTailCallRef(func->name));
+      WriteTailCallFuncDeclaration(GetTailCallRef(func->name));
       Write(";", Newline());
     }
     ++func_index;
@@ -1879,11 +1867,10 @@ void CWriter::WriteFuncDeclaration(const FuncDeclaration& decl,
   Write(")");
 }
 
-void CWriter::WriteTailCallFuncDeclaration(
-    const std::string& mangled_name,
-    const std::string& module_instance_type) {
-  Write("void ", mangled_name, "(", module_instance_type,
-        "*instance, void *tail_call_stack, wasm_rt_function_ptr_t* next)");
+void CWriter::WriteTailCallFuncDeclaration(const std::string& mangled_name) {
+  Write("void ", mangled_name,
+        "(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* "
+        "next)");
 }
 
 void CWriter::WriteImportFuncDeclaration(const FuncDeclaration& decl,
@@ -2357,57 +2344,6 @@ void CWriter::WriteElemTableInit(bool active_initialization,
   Write(");", Newline());
 }
 
-/**
- *
- * WriteFunctionExporterTop and Body produce a "function exporter":
- * a short stub function (under the name of the export) that forwards the
- * arguments to the internal function and returns its result to the caller.
- *
- **/
-
-void CWriter::WriteFunctionExporterTop(
-    const Func* func,
-    const std::string& mangled_export_name,
-    std::vector<std::string>& param_index_to_name) {
-  func_ = func;
-  local_syms_.clear();
-  local_sym_map_.clear();
-  stack_var_sym_map_.clear();
-  func_sections_.clear();
-  func_includes_.clear();
-
-  Write(ResultType(func_->decl.sig.result_types), " ", mangled_export_name,
-        "(");
-  MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
-                                &param_index_to_name);
-  WriteParams(param_index_to_name);
-}
-
-void CWriter::WriteFunctionExporterBody(
-    const std::string& internal_name,
-    const std::vector<std::string>& param_index_to_name,
-    bool is_tail_callee) {
-  Write(OpenBrace());
-  Write("return ");
-  if (is_tail_callee) {
-    Write(TailCallRef(internal_name));
-  } else {
-    Write(GlobalName(ModuleFieldType::Func, internal_name));
-  }
-  Write("(");
-
-  if (IsImport(internal_name)) {
-    Write("instance->", GlobalName(ModuleFieldType::Import,
-                                   import_module_sym_map_.at(internal_name)));
-  } else {
-    Write("instance");
-  }
-  WriteParamSymbols(param_index_to_name);
-  Write(CloseBrace(), Newline());
-
-  func_ = nullptr;
-}
-
 void CWriter::WriteExports(CWriterPhase kind) {
   if (module_->exports.empty())
     return;
@@ -2427,7 +2363,15 @@ void CWriter::WriteExports(CWriterPhase kind) {
         if (kind == CWriterPhase::Declarations) {
           WriteFuncDeclaration(func->decl, mangled_name);
         } else {
-          WriteFunctionExporterTop(func, mangled_name, index_to_name);
+          func_ = func;
+          local_syms_ = global_syms_;
+          local_sym_map_.clear();
+          stack_var_sym_map_.clear();
+          Write(ResultType(func_->decl.sig.result_types), " ", mangled_name,
+                "(");
+          MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(),
+                                        func_->bindings, &index_to_name);
+          WriteParams(index_to_name);
         }
         break;
       }
@@ -2475,7 +2419,23 @@ void CWriter::WriteExports(CWriterPhase kind) {
     Write(" ");
     switch (export_->kind) {
       case ExternalKind::Func: {
-        WriteFunctionExporterBody(internal_name, index_to_name, false);
+        Write(OpenBrace());
+        Write("return ", ExternalRef(ModuleFieldType::Func, internal_name),
+              "(");
+
+        if (IsImport(internal_name)) {
+          Write("instance->",
+                GlobalName(ModuleFieldType::Import,
+                           import_module_sym_map_[internal_name]));
+        } else {
+          Write("instance");
+        }
+        WriteParamSymbols(index_to_name);
+        Write(CloseBrace(), Newline());
+
+        local_sym_map_.clear();
+        stack_var_sym_map_.clear();
+        func_ = nullptr;
         break;
       }
 
@@ -2520,18 +2480,15 @@ void CWriter::WriteTailCallExports(CWriterPhase kind) {
     }
 
     const std::string mangled_name = TailCallExportName(export_->name);
-    const Func* func = module_->GetFunc(export_->var);
 
     Write(Newline(), "/* export for tail-call of '",
           SanitizeForComment(export_->name), "' */", Newline());
     if (kind == CWriterPhase::Declarations) {
-      WriteFuncDeclaration(func->decl, mangled_name);
+      WriteTailCallFuncDeclaration(mangled_name);
       Write(";", Newline());
     } else {
       std::vector<std::string> index_to_name;
-      WriteFunctionExporterTop(func, mangled_name, index_to_name);
-      Write(" ");
-      WriteFunctionExporterBody(func->name, index_to_name, true);
+      /* XXX */
     }
   }
 }
@@ -2850,8 +2807,7 @@ void CWriter::WriteTailCallee(const Func& func) {
   Write(Newline());
 
   PushFuncSection();
-  WriteTailCallFuncDeclaration(GetTailCallRef(func.name),
-                               ModuleInstanceTypeName());
+  WriteTailCallFuncDeclaration(GetTailCallRef(func.name));
   Write(" ", OpenBrace());
   std::vector<std::string> index_to_name;
   MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
@@ -2872,21 +2828,7 @@ void CWriter::WriteTailCallee(const Func& func) {
   PushTypes(func.decl.sig.result_types);
 #endif
 
-  // Return the top of the stack implicitly. (XXX)
-  Index num_results = func.GetNumResults();
-  if (num_results == 1) {
-    Write("return ", StackVar(0), ";", Newline());
-  } else if (num_results >= 2) {
-    Write(OpenBrace());
-    Write(ResultType(func.decl.sig.result_types), " tmp;", Newline());
-    for (Index i = 0; i < num_results; ++i) {
-      Type type = func.GetResultType(i);
-      Writef("tmp.%c%d = ", MangleType(type), i);
-      Write(StackVar(num_results - i - 1), ";", Newline());
-    }
-    Write("return tmp;", Newline());
-    Write(CloseBrace(), Newline());
-  }
+  // Need to return the top of the stack implicitly. (XXX)
 
   stream_ = prev_stream;
 

@@ -42,7 +42,7 @@ wasm_rt_func_type_t wasm2c_test_get_func_type(uint32_t param_count, uint32_t res
 u32 w2c_test_add(w2c_test*, u32, u32);
 
 /* export for tail-call of 'add' */
-u32 wasm2c_tailcall_w2c_test_add(w2c_test*, u32, u32);
+void wasm2c_tailcall_1024_w2c_test_add(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next);
 
 #ifdef __cplusplus
 }
@@ -664,9 +664,17 @@ DEFINE_TABLE_FILL(externref)
 #endif
 
 static u32 w2c_test_add_0(w2c_test*, u32, u32);
-static u32 wasm2c_tailcall_w2c_test_add_0(w2c_test*, u32, u32);
+static void wasm2c_tailcall_1024_w2c_test_add_0(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next);
 
 FUNC_TYPE_T(w2c_test_t0) = "\x92\xfb\x6a\xdf\x49\x07\x0a\x83\xbe\x08\x02\x68\xcd\xf6\x95\x27\x4a\xc2\xf3\xe5\xe4\x7d\x29\x49\xe8\xed\x42\x92\x6a\x9d\xda\xf0";
+
+#ifndef wasm_multi_ii
+#define wasm_multi_ii wasm_multi_ii
+struct wasm_multi_ii {
+  u32 i0;
+  u32 i1;
+};
+#endif  /* wasm_multi_ii */
 
 /* export: 'add' */
 u32 w2c_test_add(w2c_test* instance, u32 var_p0, u32 var_p1) {
@@ -674,9 +682,6 @@ u32 w2c_test_add(w2c_test* instance, u32 var_p0, u32 var_p1) {
 }
 
 /* export for tail-call of 'add' */
-u32 wasm2c_tailcall_w2c_test_add(w2c_test* instance, u32 var_p0, u32 var_p1) {
-  return wasm2c_tailcall_w2c_test_add_0(instance, var_p0, var_p1);
-}
 
 void wasm2c_test_instantiate(w2c_test* instance) {
   assert(wasm_rt_is_initialized());
@@ -710,11 +715,6 @@ u32 w2c_test_add_0(w2c_test* instance, u32 var_p0, u32 var_p1) {
   return var_i0;
 }
 
-u32 wasm2c_tailcall_w2c_test_add_0(w2c_test* instance, u32 var_p0, u32 var_p1) {
-  u32 var_i0, var_i1;
-  var_i0 = var_p0;
-  var_i1 = var_p1;
-  var_i0 += var_i1;
-  return var_i0;
+void wasm2c_tailcall_1024_w2c_test_add_0(void **instance_ptr, void *tail_call_stack, wasm_rt_function_ptr_t* next) {
 }
 ;;; STDOUT ;;)
