@@ -2865,7 +2865,7 @@ void CWriter::WriteTailCallee(const Func& func) {
     }
     Write(CloseBrace(), Newline());
   }
-  Write("next = NULL;", Newline());
+  Write("*next = NULL;", Newline());
 
   stream_ = prev_stream;
 
@@ -3794,7 +3794,8 @@ void CWriter::Write(const ExprList& exprs) {
           }
 
           const Func& func = *module_->GetFunc(inst->var);
-          Write("next = ", TailCallRef(inst->var.name()), ";", Newline());
+          Write("*next = (wasm_rt_function_ptr_t)",
+                TailCallRef(inst->var.name()), ";", Newline());
         } else {
           Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
           Write(ExprList{std::make_unique<ReturnExpr>()});
