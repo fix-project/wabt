@@ -2799,10 +2799,6 @@ void CWriter::WriteTailCallee(const Func& func) {
           ", tail_call_stack, sizeof(", ParamName(index_to_name[0]), "));",
           Newline());
   } else if (func_->GetNumParams() > 1) {
-    Write("struct ", MangleMultivalueTypes(func_->decl.sig.param_types),
-          " params_tmp;", Newline());
-    Write("wasm_rt_memcpy(&params_tmp, tail_call_stack, sizeof(params_tmp));",
-          Newline());
     for (Type type : {Type::I32, Type::I64, Type::F32, Type::F64, Type::V128,
                       Type::FuncRef, Type::ExternRef}) {
       Index param_index = 0;
@@ -2819,9 +2815,6 @@ void CWriter::WriteTailCallee(const Func& func) {
           }
 
           Write(DefineParamName(index_to_name[param_index]));
-          Writef(" = params_tmp.%c%d",
-                 MangleType(func_->decl.sig.param_types.at(param_index)),
-                 param_index);
           ++count;
         }
         ++param_index;
@@ -2831,9 +2824,19 @@ void CWriter::WriteTailCallee(const Func& func) {
         Write(";", Newline());
       }
     }
+    Write(OpenBrace());
+    Write("struct ", MangleMultivalueTypes(func_->decl.sig.param_types),
+          " tmp;", Newline());
+    Write("wasm_rt_memcpy(&tmp, tail_call_stack, sizeof(tmp));", Newline());
+    for (Index i = 0; i < func_->GetNumParams(); ++i) {
+      Write(ParamName(index_to_name[i]));
+      Writef(" = tmp.%c%d;", MangleType(func_->GetParamType(i)), i);
+      Write(Newline());
+    }
+    Write(CloseBrace(), Newline());
   }
 
-  //  WriteParamsAndLocals();  // XXX
+  WriteLocals(index_to_name);
 
   PushFuncSection();
 
@@ -5581,12 +5584,12 @@ void CWriter::WriteCSource() {
   WriteFuncDeclarations();
   WriteDataInitializerDecls();
   WriteElemInitializerDecls();
+  WriteMultivalueParamTypes();
 
   /* Write the module-wide material to the first output stream */
   stream_ = c_streams_.front();
   WriteMultiCTop();
   WriteFuncTypes();
-  WriteMultivalueParamTypes();
   WriteTags();
   WriteGlobalInitializers();
   WriteDataInitializers();
