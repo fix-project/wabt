@@ -269,7 +269,6 @@ class CWriter {
   static constexpr char MangleType(Type);
   static constexpr char MangleField(ModuleFieldType);
   static std::string MangleMultivalueTypes(const TypeVector&);
-  static std::string MangleTagTypes(const TypeVector&);
   static std::string Mangle(std::string_view name, bool double_underscores);
   static std::string MangleName(std::string_view);
   static std::string MangleModuleName(std::string_view);
@@ -650,16 +649,6 @@ static std::string SanitizeForComment(std::string_view str) {
 std::string CWriter::MangleMultivalueTypes(const TypeVector& types) {
   assert(types.size() >= 2);
   std::string result = "wasm_multi_";
-  for (auto type : types) {
-    result += MangleType(type);
-  }
-  return result;
-}
-
-// static
-std::string CWriter::MangleTagTypes(const TypeVector& types) {
-  assert(types.size() >= 2);
-  std::string result = "wasm_tag_";
   for (auto type : types) {
     result += MangleType(type);
   }
@@ -1532,18 +1521,7 @@ void CWriter::WriteTagTypes() {
     if (num_params <= 1) {
       continue;
     }
-    const std::string name = MangleTagTypes(tag_type.sig.param_types);
-    // use same method as WriteMultivalueTypes
-    Write("#ifndef ", name, Newline());
-    Write("#define ", name, " ", name, Newline());
-    Write("struct ", name, " ", OpenBrace());
-    for (Index i = 0; i < num_params; ++i) {
-      Type type = tag_type.GetParamType(i);
-      Write(type);
-      Writef(" %c%d;", MangleType(type), i);
-      Write(Newline());
-    }
-    Write(CloseBrace(), ";", Newline(), "#endif  /* ", name, " */", Newline());
+    WriteMultivalueType(tag_type.sig.param_types);
   }
 }
 
@@ -2809,9 +2787,51 @@ void CWriter::WriteTailCallee(const Func& func) {
   PushFuncSection();
   WriteTailCallFuncDeclaration(GetTailCallRef(func.name));
   Write(" ", OpenBrace());
+  Write(ModuleInstanceTypeName(), " *instance = *instance_ptr;", Newline());
+
   std::vector<std::string> index_to_name;
   MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
                                 &index_to_name);
+  if (func_->GetNumParams() == 1) {
+    Write(func_->GetParamType(0), " ", DefineParamName(index_to_name[0]), ";",
+          Newline());
+    Write("wasm_rt_memcpy(&", ParamName(index_to_name[0]),
+          ", tail_call_stack, sizeof(", ParamName(index_to_name[0]), "));",
+          Newline());
+  } else if (func_->GetNumParams() > 1) {
+    Write("struct ", MangleMultivalueTypes(func_->decl.sig.param_types),
+          " params_tmp;", Newline());
+    Write("wasm_rt_memcpy(&params_tmp, tail_call_stack, sizeof(params_tmp));",
+          Newline());
+    for (Type type : {Type::I32, Type::I64, Type::F32, Type::F64, Type::V128,
+                      Type::FuncRef, Type::ExternRef}) {
+      Index param_index = 0;
+      size_t count = 0;
+      for (Type param_type : func_->decl.sig.param_types) {
+        if (param_type == type) {
+          if (count == 0) {
+            Write(type, " ");
+            Indent(4);
+          } else {
+            Write(", ");
+            if ((count % 8) == 0)
+              Write(Newline());
+          }
+
+          Write(DefineParamName(index_to_name[param_index]));
+          Writef(" = params_tmp.%c%d",
+                 MangleType(func_->decl.sig.param_types.at(param_index)),
+                 param_index);
+          ++count;
+        }
+        ++param_index;
+      }
+      if (count != 0) {
+        Dedent(4);
+        Write(";", Newline());
+      }
+    }
+  }
 
   //  WriteParamsAndLocals();  // XXX
 
@@ -3078,7 +3098,7 @@ void CWriter::Write(const Catch& c) {
       PushType(type);
     }
     Write(OpenBrace());
-    Write("struct ", MangleTagTypes(tag_type.sig.param_types), " tmp;",
+    Write("struct ", MangleMultivalueTypes(tag_type.sig.param_types), " tmp;",
           Newline());
     Write("wasm_rt_memcpy(&tmp, wasm_rt_exception(), sizeof(tmp));", Newline());
     for (unsigned int i = 0; i < tag_type.sig.param_types.size(); ++i) {
@@ -3678,7 +3698,7 @@ void CWriter::Write(const ExprList& exprs) {
                 Newline());
         } else {
           Write(OpenBrace());
-          Write("struct ", MangleTagTypes(tag->decl.sig.param_types));
+          Write("struct ", MangleMultivalueTypes(tag->decl.sig.param_types));
           Write(" tmp = {");
           for (Index i = 0; i < num_params; ++i) {
             Write(StackVar(i), ", ");
