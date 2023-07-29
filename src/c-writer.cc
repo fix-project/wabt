@@ -2865,6 +2865,7 @@ void CWriter::WriteTailCallee(const Func& func) {
     }
     Write(CloseBrace(), Newline());
   }
+  Write("next = NULL;", Newline());
 
   stream_ = prev_stream;
 
@@ -3780,8 +3781,24 @@ void CWriter::Write(const ExprList& exprs) {
 
       case ExprType::ReturnCall: {
         const auto inst = cast<ReturnCallExpr>(&expr);
-        Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
-        Write(ExprList{std::make_unique<ReturnExpr>()});
+        if (in_tail_callee_) {
+          const Label* label = FindLabel(Var(label_stack_.size() - 1, {}));
+          assert(try_catch_stack_.size() >= label->try_catch_stack_size);
+
+          if (try_catch_stack_.size() != label->try_catch_stack_size) {
+            const std::string& name =
+                try_catch_stack_.at(label->try_catch_stack_size).name;
+
+            Write("wasm_rt_set_unwind_target(", name, "_outer_target);",
+                  Newline());
+          }
+
+          const Func& func = *module_->GetFunc(inst->var);
+          Write("next = ", TailCallRef(inst->var.name()), ";", Newline());
+        } else {
+          Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
+          Write(ExprList{std::make_unique<ReturnExpr>()});
+        }
         return;
       }
 
