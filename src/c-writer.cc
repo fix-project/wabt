@@ -512,6 +512,8 @@ class CWriter {
       name_to_output_file_index_;
 
   bool simd_used_in_header_;
+
+  bool in_tail_callee_;
 };
 
 // TODO: if WABT begins supporting debug names for labels,
@@ -2701,6 +2703,7 @@ bool CWriter::IsImport(const std::string& name) const {
 
 void CWriter::Write(const Func& func) {
   func_ = &func;
+  in_tail_callee_ = false;
   local_syms_.clear();
   local_sym_map_.clear();
   stack_var_sym_map_.clear();
@@ -2774,6 +2777,7 @@ void CWriter::Write(const Func& func) {
 
 void CWriter::WriteTailCallee(const Func& func) {
   func_ = &func;
+  in_tail_callee_ = true;
   local_syms_.clear();
   local_sym_map_.clear();
   stack_var_sym_map_.clear();
@@ -2793,11 +2797,8 @@ void CWriter::WriteTailCallee(const Func& func) {
   MakeTypeBindingReverseMapping(func_->GetNumParamsAndLocals(), func_->bindings,
                                 &index_to_name);
   if (func_->GetNumParams() == 1) {
-    Write(func_->GetParamType(0), " ", DefineParamName(index_to_name[0]), ";",
-          Newline());
-    Write("wasm_rt_memcpy(&", ParamName(index_to_name[0]),
-          ", tail_call_stack, sizeof(", ParamName(index_to_name[0]), "));",
-          Newline());
+    Write(func_->GetParamType(0), " ", DefineParamName(index_to_name[0]),
+          " = *(", func_->GetParamType(0), "*)tail_call_stack;", Newline());
   } else if (func_->GetNumParams() > 1) {
     for (Type type : {Type::I32, Type::I64, Type::F32, Type::F64, Type::V128,
                       Type::FuncRef, Type::ExternRef}) {
@@ -2826,11 +2827,10 @@ void CWriter::WriteTailCallee(const Func& func) {
     }
     Write(OpenBrace());
     Write("struct ", MangleMultivalueTypes(func_->decl.sig.param_types),
-          " tmp;", Newline());
-    Write("wasm_rt_memcpy(&tmp, tail_call_stack, sizeof(tmp));", Newline());
+          " *tmp = tail_call_stack;", Newline());
     for (Index i = 0; i < func_->GetNumParams(); ++i) {
       Write(ParamName(index_to_name[i]));
-      Writef(" = tmp.%c%d;", MangleType(func_->GetParamType(i)), i);
+      Writef(" = tmp->%c%d;", MangleType(func_->GetParamType(i)), i);
       Write(Newline());
     }
     Write(CloseBrace(), Newline());
@@ -2840,7 +2840,6 @@ void CWriter::WriteTailCallee(const Func& func) {
 
   PushFuncSection();
 
-#if 0
   std::string label = DefineLabelName(kImplicitFuncLabel);
   ResetTypeStack(0);
   std::string empty;  // Must not be temporary, since address is taken by Label.
@@ -2849,9 +2848,23 @@ void CWriter::WriteTailCallee(const Func& func) {
   PopLabel();
   ResetTypeStack(0);
   PushTypes(func.decl.sig.result_types);
-#endif
 
-  // Need to return the top of the stack implicitly. (XXX)
+  // Return the top of the stack implicitly.
+  Index num_results = func.GetNumResults();
+  if (num_results == 1) {
+    Write("wasm_rt_memcpy(tail_call_stack, &", StackVar(0), ", sizeof(",
+          StackVar(0), "));", Newline());
+  } else if (num_results >= 2) {
+    Write(OpenBrace());
+    Write(ResultType(func.decl.sig.result_types), " *tmp = tail_call_stack;",
+          Newline());
+    for (Index i = 0; i < num_results; ++i) {
+      Type type = func.GetResultType(i);
+      Writef("tmp->%c%d = ", MangleType(type), i);
+      Write(StackVar(num_results - i - 1), ";", Newline());
+    }
+    Write(CloseBrace(), Newline());
+  }
 
   stream_ = prev_stream;
 
