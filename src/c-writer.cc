@@ -3797,35 +3797,71 @@ void CWriter::Write(const ExprList& exprs) {
         }
 
         const auto inst = cast<ReturnCallExpr>(&expr);
+        Write(OpenBrace());
+        if (!in_tail_callee_) {
+          Write("void *instance_ptr_storage;", Newline());
+          Write("void **instance_ptr = &instance_ptr_storage;", Newline());
+          Write("char tail_call_stack[", std::to_string(kTailCallStackSize),
+                "];", Newline());
+          Write("wasm_rt_tailcallee_t next_storage;", Newline(), Newline());
+          Write("wasm_rt_tailcallee_t *next = &next_storage;", Newline());
+        }
+        const Func& func = *module_->GetFunc(inst->var);
+        const Index num_params = func.GetNumParams();
+        const Index num_results = func.GetNumResults();
+        if (num_params == 1) {
+          Write("wasm_rt_memcpy(tail_call_stack, &", StackVar(0), ", sizeof(",
+                StackVar(0), "));", Newline());
+        } else if (num_params >= 2) {
+          Write(OpenBrace());
+          Write("struct ", MangleMultivalueTypes(func.decl.sig.param_types),
+                " *tmp = (struct ",
+                MangleMultivalueTypes(func.decl.sig.param_types),
+                " *)tail_call_stack;", Newline());
+          for (Index i = 0; i < num_params; ++i) {
+            Type type = func.GetParamType(i);
+            Writef("tmp->%c%d = ", MangleType(type), i);
+            Write(StackVar(num_params - i - 1), ";", Newline());
+          }
+          Write(CloseBrace(), Newline());
+        }
+
+        Write("next->fn = ", TailCallRef(func.name), ";", Newline());
+        if (IsImport(func.name)) {
+          Write("*instance_ptr = ",
+                GlobalName(ModuleFieldType::Import,
+                           import_module_sym_map_.at(func.name)),
+                ";", Newline());
+        }
+
         if (in_tail_callee_) {
-          const Func& func = *module_->GetFunc(inst->var);
-          const Index num_params = func.GetNumParams();
-          if (num_params == 1) {
-            Write("wasm_rt_memcpy(tail_call_stack, &", StackVar(0), ", sizeof(",
-                  StackVar(0), "));", Newline());
-          } else if (num_params >= 2) {
+          Write("return;", Newline());
+        } else {
+          Write(
+              "while (next->fn) { next->fn( instance_ptr, tail_call_stack, "
+              "next ); }",
+              Newline());
+          DropTypes(num_params);
+          if (num_results == 1) {
+            PushTypes(func.decl.sig.result_types);
+            Write(StackVar(0), " = *(", StackType(0), "*)tail_call_stack;",
+                  Newline());
+          } else if (num_results >= 2) {
             Write(OpenBrace());
-            Write("struct ", MangleMultivalueTypes(func.decl.sig.param_types),
+            Write("struct ", MangleMultivalueTypes(func.decl.sig.result_types),
                   " *tmp = tail_call_stack;", Newline());
-            for (Index i = 0; i < num_params; ++i) {
-              Type type = func.GetParamType(i);
-              Writef("tmp->%c%d = ", MangleType(type), i);
-              Write(StackVar(num_params - i - 1), ";", Newline());
+            for (Index i = 0; i < num_results; ++i) {
+              Type type = func.GetResultType(i);
+              PushType(type);
+              Write(StackVar(0));
+              Writef(" = tmp->%c%d;", MangleType(type), i);
+              Write(Newline());
             }
             Write(CloseBrace(), Newline());
           }
-          Write("next->fn = ", TailCallRef(func.name), ";", Newline());
-          if (IsImport(func.name)) {
-            Write("*instance_ptr = ",
-                  GlobalName(ModuleFieldType::Import,
-                             import_module_sym_map_.at(func.name)),
-                  ";", Newline());
-          }
-          Write("return;", Newline());
-        } else {
-          Write(ExprList{std::make_unique<CallExpr>(inst->var, inst->loc)});
-          Write(ExprList{std::make_unique<ReturnExpr>()});
         }
+
+        Write(CloseBrace(), Newline());
         return;
       }
 
