@@ -21,6 +21,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <queue>
 #include <set>
 #include <string_view>
 #include <vector>
@@ -210,6 +211,14 @@ static std::vector<size_t> default_name_to_output_file_index(
   return result;
 }
 
+/*
+ * This function is the default behavior for stream_finish_callback_.
+ */
+static void default_stream_finish_callback(size_t stream_index,
+                                           Stream* stream) {
+  return;
+}
+
 class CWriter {
  public:
   CWriter(std::vector<Stream*>&& c_streams,
@@ -227,8 +236,10 @@ class CWriter {
     module_prefix_ = MangleModuleName(options_.module_name);
     if (c_streams_.size() != 1 && options.name_to_output_file_index) {
       name_to_output_file_index_ = options.name_to_output_file_index;
+      stream_finish_callback_ = options.stream_finish_callback;
     } else {
       name_to_output_file_index_ = default_name_to_output_file_index;
+      stream_finish_callback_ = default_stream_finish_callback;
     }
   }
 
@@ -483,6 +494,8 @@ class CWriter {
                                     size_t,
                                     size_t)>
       name_to_output_file_index_;
+
+  std::function<void(size_t, Stream*)> stream_finish_callback_;
 };
 
 // TODO: if WABT begins supporting debug names for labels,
@@ -2540,14 +2553,34 @@ void CWriter::WriteFuncs() {
   std::vector<size_t> c_stream_assignment =
       name_to_output_file_index_(module_->funcs.begin(), module_->funcs.end(),
                                  module_->num_func_imports, c_streams_.size());
-  Index func_index = 0;
-  for (const Func* func : module_->funcs) {
+
+  std::vector<std::queue<size_t>> stream_to_funcs_;
+  stream_to_funcs_.resize(c_streams_.size());
+
+  for (size_t func_index = 0; func_index < module_->funcs.size();
+       func_index++) {
     bool is_import = func_index < module_->num_func_imports;
     if (!is_import) {
-      stream_ = c_streams_.at(c_stream_assignment.at(func_index));
+      stream_to_funcs_[c_stream_assignment.at(func_index)].push(func_index);
+    }
+  }
+
+  for (size_t stream_index = 0; stream_index < c_streams_.size();
+       stream_index++) {
+    stream_ = c_streams_.at(stream_index);
+    auto& func_queue = stream_to_funcs_.at(stream_index);
+    while (!func_queue.empty()) {
+      const auto* func = module_->funcs.at(func_queue.front());
+      func_queue.pop();
       Write(*func);
     }
-    ++func_index;
+
+    if (stream_->offset() == 0) {
+      Write("/* Empty wasm2c generated file */\n");
+      Write("typedef int dummy_def;");
+    }
+
+    stream_finish_callback_(stream_index, c_streams_.at(stream_index));
   }
 }
 
@@ -5176,7 +5209,7 @@ void CWriter::WriteCSource() {
   WriteFuncs();
 
   /* For any empty .c output, write a dummy typedef to avoid gcc warning */
-  WriteMultiCTopEmpty();
+  // WriteMultiCTopEmpty();
 }
 
 Result CWriter::WriteModule(const Module& module) {

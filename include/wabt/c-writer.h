@@ -41,6 +41,15 @@ struct WriteCOptions {
       size_t num_imported_functions,
       size_t num_outputs)>
       name_to_output_file_index;
+
+  /*
+   * stream_finish_callback takes stream_index and a stream_pointer. WriteC
+   * calls stream_finish_callback when it has completed writing a file. Only
+   * called when
+   * --num-outputs is used.
+   */
+  std::function<void(size_t stream_index, Stream* stream)>
+      stream_finish_callback;
 };
 
 Result WriteC(std::vector<Stream*>&& c_streams,
