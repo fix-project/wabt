@@ -44,6 +44,7 @@ static unsigned int s_num_outputs = 1;
 static Features s_features;
 static WriteCOptions s_write_c_options;
 static bool s_read_debug_names = true;
+static bool s_sw_check = false;
 static std::unique_ptr<FileStream> s_log_stream;
 
 static const char s_description[] =
@@ -99,6 +100,8 @@ static void ParseOptions(int argc, char** argv) {
                        s_infile = argument;
                        ConvertBackslashToSlash(&s_infile);
                      });
+  parser.AddOption("sw-bounds-check", "use sw bounds check for memories",
+                   []() { s_sw_check = true; });
   parser.Parse(argc, argv);
 
   bool any_non_supported_feature = false;
@@ -147,6 +150,12 @@ Result Wasm2cMain(Errors& errors) {
   /* TODO(binji): This shouldn't fail; if a name can't be applied
    * (because the index is invalid, say) it should just be skipped. */
   ApplyNames(&module);
+
+  if (s_sw_check) {
+    for (auto m : module.memories) {
+      m->bounds_checked = true;
+    }
+  }
 
   if (!s_outfile.empty()) {
     std::string header_name_full =
