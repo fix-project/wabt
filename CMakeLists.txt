@@ -125,8 +125,8 @@ include(CheckTypeSize)
 check_type_size(ssize_t SSIZE_T)
 check_type_size(size_t SIZEOF_SIZE_T)
 
-include(TestBigEndian)  # Note: deprecated in CMake 3.20
-test_big_endian(WABT_BIG_ENDIAN)
+#include(TestBigEndian)  # Note: deprecated in CMake 3.20
+#test_big_endian(WABT_BIG_ENDIAN)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(WABT_DEBUG 1)
@@ -417,9 +417,9 @@ endif ()
 
 add_library(wasm-rt-impl STATIC wasm2c/wasm-rt-impl.c wasm2c/wasm-rt-impl.h)
 add_library(wabt::wasm-rt-impl ALIAS wasm-rt-impl)
-if (WABT_BIG_ENDIAN)
-  target_compile_definitions(wasm-rt-impl PUBLIC WABT_BIG_ENDIAN=1)
-endif ()
+#if (WABT_BIG_ENDIAN)
+#  target_compile_definitions(wasm-rt-impl PUBLIC WABT_BIG_ENDIAN=1)
+#endif ()
 
 if (WABT_INSTALL_RULES)
   install(
